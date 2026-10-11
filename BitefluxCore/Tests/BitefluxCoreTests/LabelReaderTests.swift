@@ -79,7 +79,8 @@ final class LabelReaderTests: XCTestCase {
             "sodium_mg": 180,
         ])))
 
-        XCTAssertEqual(try XCTUnwrap(reading.energyKcal), 401.53, accuracy: 0.01)
+        // 1680 kJ is 401.53 kcal, rounded to whole kcal for the form.
+        XCTAssertEqual(reading.energyKcal, 402)
         XCTAssertEqual(try XCTUnwrap(reading.saltG), 0.45, accuracy: 0.0001)
         XCTAssertNil(reading.fiberG)
         XCTAssertTrue(reading.perMillilitre)
@@ -99,6 +100,22 @@ final class LabelReaderTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(reading.saltG), 0.4, accuracy: 0.0001)
         XCTAssertEqual(reading.servingGrams, 25)
         XCTAssertTrue(reading.fromPortion)
+    }
+
+    func testValuesWorkedOutFromAPortionAreRounded() throws {
+        // A US label: 28 g per serving, sodium in milligrams.
+        let reading = try LabelReader.reading(fromAnswer: answer(label([
+            "column": "per_portion", "portion_grams": 28, "portion_name": "1 serving",
+            "energy_kcal": 130, "fat_g": 5, "saturated_fat_g": 3.5, "carbohydrates_g": 20, "protein_g": 1,
+            "sodium_mg": 45,
+        ])))
+
+        XCTAssertEqual(reading.energyKcal, 464)
+        XCTAssertEqual(reading.fatG, 17.9)
+        XCTAssertEqual(reading.saturatedFatG, 12.5)
+        XCTAssertEqual(reading.carbohydratesG, 71.4)
+        XCTAssertEqual(reading.proteinG, 3.6)
+        XCTAssertEqual(reading.saltG, 0.4)
     }
 
     func testPortionOnlyLabelWithoutWeightCantBeUsed() {

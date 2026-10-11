@@ -203,17 +203,28 @@ public enum LabelReader {
             guard let portionGrams else { throw Problem.onlyPerPortion }
             factor = 100 / portionGrams
         }
-        func per100g(_ key: String) -> Double? {
-            amount(key).map { $0 * factor }
+        func rounded(_ value: Double, places: Int) -> Double {
+            let scale = pow(10, Double(places))
+            return (value * scale).rounded() / scale
+        }
+        let fromPortion = column == "per_portion"
+        // Values copied as printed stay as printed. Values worked out from a portion are rounded,
+        // so the form shows 464 kcal rather than 464.29.
+        func per100g(_ key: String, places: Int = 1) -> Double? {
+            guard let value = amount(key) else { return nil }
+            return fromPortion ? rounded(value * factor, places: places) : value
         }
 
-        let salt = per100g("salt_g") ?? per100g("sodium_mg").map { $0 / NutritionConversion.sodiumMilligrams(fromSaltGrams: 1) }
+        let energyKcal = per100g("energy_kcal", places: 0)
+            ?? amount("energy_kj").map { rounded(NutritionConversion.kilocalories(fromKilojoules: $0 * factor), places: 0) }
+        let salt = per100g("salt_g", places: 2)
+            ?? amount("sodium_mg").map { rounded($0 * factor / NutritionConversion.sodiumMilligrams(fromSaltGrams: 1), places: 2) }
         let unsure = (label["unsure"] as? [String] ?? []).compactMap(Field.init(rawValue:))
 
         return Reading(
             name: text("product_name"),
             brand: text("brand"),
-            energyKcal: per100g("energy_kcal") ?? per100g("energy_kj").map(NutritionConversion.kilocalories(fromKilojoules:)),
+            energyKcal: energyKcal,
             proteinG: per100g("protein_g"),
             carbohydratesG: per100g("carbohydrates_g"),
             sugarG: per100g("sugars_g"),
@@ -224,7 +235,7 @@ public enum LabelReader {
             servingGrams: portionGrams,
             servingName: portionGrams == nil ? nil : text("portion_name"),
             perMillilitre: column == "per_100ml",
-            fromPortion: column == "per_portion",
+            fromPortion: fromPortion,
             unsure: Set(unsure)
         )
     }
@@ -246,9 +257,14 @@ public enum LabelReader {
     Set a value to null when the label doesn't list it or you can't read it at all. List in "unsure" \
     every value you could only partly read, for example through glare, blur, a fold or a cut-off edge.
 
-    When the label names a portion with its weight, like "per koek (25 g)", give the weight in \
-    "portion_grams" and the words in "portion_name", like "1 koek". Give the product name and brand \
-    only when they are on the photo.
+    Give "portion_grams" whenever the label gives the weight of a portion in grams, also when it \
+    only appears in a column heading, like "per koek (25 g)", "Per 49g", "per broodbeleg (20 g)", \
+    "blik (140 g)" or "portie: 450 gr". Give the words for that portion in "portion_name", like \
+    "1 koek" or "1 blik", or "1 portie" when the label gives only the weight. Leave both null when \
+    a portion is only given in ml.
+
+    Give the product name and brand only when they are on the photo. When the name is printed in \
+    several languages, give the Dutch one, or else the English one.
 
     Set "is_nutrition_label" to false when the photo shows no nutrition table, and leave the rest null.
     """
