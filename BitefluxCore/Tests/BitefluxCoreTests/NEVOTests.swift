@@ -44,6 +44,24 @@ final class NEVOTests: XCTestCase {
         XCTAssertEqual(NEVO.search(" ", in: foods), [])
     }
 
+    func testSearchPutsWholeWordsBeforePartsOfWords() {
+        func food(_ code: String, _ name: String) -> NEVO.Food {
+            NEVO.Food(
+                code: code, dutchName: name, englishName: nil, synonym: nil,
+                per100g: Nutrients(energyKcal: 0, proteinG: 0, carbohydratesG: 0, fatG: 0)
+            )
+        }
+        let foods = [
+            food("1", "Aardappelen gekookt"),
+            food("2", "Taart appel"),
+            food("3", "Appelmoes"),
+            food("4", "Appel z schil gem"),
+        ]
+
+        XCTAssertEqual(NEVO.search("appel", in: foods).map(\.code), ["4", "3", "2", "1"])
+        XCTAssertEqual(NEVO.search("appel", in: foods, limit: 3).map(\.code), ["4", "3", "2"])
+    }
+
     /// Runs against the real export when NEVO_CSV points to it, for example:
     /// NEVO_CSV=~/claude/nevo/NEVO2025_v9.0/NEVO2025_v9.0.csv swift test
     func testRealTable() throws {

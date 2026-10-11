@@ -111,29 +111,31 @@ public enum NEVO {
 
     /// Foods whose Dutch name, English name or synonym holds every word of `query`.
     /// Names that begin with the query as a whole word come first, then names that begin
-    /// with it at all, then the rest, each in table order. So "appel" lists "Appel m schil gem"
-    /// before "Appelstroop".
+    /// with it at all, then names with a word that begins with it, then the rest, each in
+    /// table order. So "appel" lists "Appel m schil gem", then "Appelstroop", then
+    /// "Taart appel", and only then "Aardappelen", where "appel" sits inside a word.
     public static func search(_ query: String, in foods: [Food], limit: Int = 20) -> [Food] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
         let folded = fold(trimmed)
+        let queryWords = folded.split(whereSeparator: \.isWhitespace)
 
         func rank(_ food: Food) -> Int {
-            let names = [food.dutchName, food.englishName].compactMap { $0.map(fold) }
+            let names = [food.dutchName, food.englishName, food.synonym].compactMap { $0.map(fold) }
             if names.contains(where: { $0 == folded || $0.hasPrefix(folded + " ") }) { return 0 }
             if names.contains(where: { $0.hasPrefix(folded) }) { return 1 }
-            return 2
+            let nameWords = names.flatMap { name in name.split { !$0.isLetter && !$0.isNumber } }
+            if queryWords.allSatisfy({ word in nameWords.contains { $0.hasPrefix(word) } }) { return 2 }
+            return 3
         }
 
         return foods
             .filter { SearchText.matches(trimmed, in: [$0.dutchName, $0.englishName, $0.synonym]) }
             .enumerated()
-            .sorted { a, b in
-                let aRank = rank(a.element), bRank = rank(b.element)
-                return aRank != bRank ? aRank < bRank : a.offset < b.offset
-            }
+            .map { (rank: rank($0.element), offset: $0.offset, food: $0.element) }
+            .sorted { ($0.rank, $0.offset) < ($1.rank, $1.offset) }
             .prefix(limit)
-            .map(\.element)
+            .map { $0.food }
     }
 
     private static func fold(_ text: String) -> String {
