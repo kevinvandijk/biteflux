@@ -1,6 +1,7 @@
 import Foundation
 
-/// Reads answers from the Open Food Facts product API (`/api/v2/product/<barcode>`).
+/// Reads answers from the Open Food Facts product API (`/api/v2/product/<barcode>`) and its
+/// search service (search.openfoodfacts.org).
 ///
 /// Open Food Facts is crowd-sourced, so a product can lack values or carry wrong ones; the app
 /// shows what it found for a check against the label before using it.
@@ -17,6 +18,23 @@ public enum OpenFoodFacts {
         components.host = "world.openfoodfacts.org"
         components.path = "/api/v2/product/\(barcode)"
         components.queryItems = [URLQueryItem(name: "fields", value: fields.joined(separator: ","))]
+        return components.url!
+    }
+
+    /// A search by name on Open Food Facts' search service, which answers apps without an account
+    /// where the main site's search often turns them away. The app only searches when asked to.
+    public static func searchURL(for terms: String) -> URL {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "search.openfoodfacts.org"
+        components.path = "/search"
+        components.queryItems = [
+            // The search service reads "word:" as a field name, so a colon read off a pack
+            // would find nothing.
+            URLQueryItem(name: "q", value: terms.replacingOccurrences(of: ":", with: " ")),
+            URLQueryItem(name: "page_size", value: "20"),
+            URLQueryItem(name: "fields", value: fields.joined(separator: ",")),
+        ]
         return components.url!
     }
 
@@ -81,7 +99,28 @@ public enum OpenFoodFacts {
         guard number(root["status"]) != 0, let product = root["product"] as? [String: Any] else {
             return .notFound
         }
+        return .found(self.product(product, barcode: barcode))
+    }
 
+    /// Reads the answer to `searchURL(for:)`: the products with a valid barcode and a name.
+    /// The search service lists them under "hits", the main site's search under "products".
+    public static func products(fromSearch data: Data) throws -> [Product] {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let products = (root["hits"] ?? root["products"]) as? [[String: Any]] else {
+            throw Problem.unreadableAnswer
+        }
+        // Open Food Facts can list the same barcode twice; the first one counts.
+        var seen: Set<String> = []
+        return products.compactMap { product in
+            guard let code = text(product["code"]) ?? number(product["code"]).map({ String(Int($0)) }),
+                  let barcode = Barcode.normalized(code) else { return nil }
+            let found = self.product(product, barcode: barcode)
+            guard found.name != nil, seen.insert(barcode).inserted else { return nil }
+            return found
+        }
+    }
+
+    private static func product(_ product: [String: Any], barcode: String) -> Product {
         let nutriments = product["nutriments"] as? [String: Any] ?? [:]
         func per100g(_ key: String) -> Double? {
             number(nutriments["\(key)_100g"])
@@ -115,25 +154,28 @@ public enum OpenFoodFacts {
             .lazy
             .compactMap { text(product[$0]) }
             .first
-        let brand = (product["brands"] as? String)?
-            .split(separator: ",")
-            .lazy
-            .compactMap { text(String($0)) }
-            .first
+        // The product API sends brands as one comma-separated string, the search service as a list.
+        let brands: [Any]
+        if let listed = product["brands"] as? String {
+            brands = listed.split(separator: ",").map(String.init)
+        } else {
+            brands = product["brands"] as? [Any] ?? []
+        }
+        let brand = brands.lazy.compactMap { text($0) }.first
 
         let servingDescription = text(product["serving_size"])
         // serving_quantity is in grams or millilitres; older products only say which in serving_size.
         let servingIsWeight = text(product["serving_quantity_unit"]).map { $0.lowercased() == "g" }
             ?? !(servingDescription.map(mentionsVolume) ?? false)
 
-        return .found(Product(
+        return Product(
             barcode: barcode,
             name: name,
             brand: brand,
             per100g: nutrients,
             servingGrams: servingIsWeight ? number(product["serving_quantity"]).flatMap { $0 > 0 ? $0 : nil } : nil,
             servingDescription: servingDescription
-        ))
+        )
     }
 
     /// Whether a serving text gives a volume, like "330 ml" or "1 glas (25cl)".
