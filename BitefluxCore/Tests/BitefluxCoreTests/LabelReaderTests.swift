@@ -120,6 +120,9 @@ final class LabelReaderTests: XCTestCase {
         }
 
         XCTAssertEqual(problem(try answer(label(["is_nutrition_label": false]))), .notALabel)
+        // Without a known column the values could be per portion, so they aren't used as per 100 g.
+        XCTAssertEqual(problem(try answer(label(["column": NSNull(), "energy_kcal": 402]))), .unknownColumn)
+        XCTAssertEqual(problem(try answer(label(["column": "per_serving", "energy_kcal": 402]))), .unknownColumn)
         XCTAssertEqual(problem(try answer("", refusal: "I can't help with that.")), .declined)
         XCTAssertEqual(problem(try answer("", finishReason: "content_filter")), .declined)
         XCTAssertEqual(problem(try answer(#"{"is_nutrition_la"#, finishReason: "length")), .cutOff)

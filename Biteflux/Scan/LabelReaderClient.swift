@@ -37,6 +37,8 @@ struct LabelReaderClient {
                 "That photo doesn't show a nutrition table. Take one of the table on the pack."
             case .reading(.onlyPerPortion):
                 "The label only gives values per portion and doesn't say what a portion weighs. Copy it by hand."
+            case .reading(.unknownColumn):
+                "The photo doesn't show whether the values are per 100 g or per portion. Take one with the column headings in view, or copy the label by hand."
             case .reading(.declined):
                 "This photo was declined. Copy the label by hand instead."
             case .reading(.interrupted):

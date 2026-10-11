@@ -96,6 +96,8 @@ public enum LabelReader {
         case notALabel
         /// The label only gives values per portion and doesn't say what a portion weighs.
         case onlyPerPortion
+        /// The photo doesn't show whether the values are per 100 g, per 100 ml or per portion.
+        case unknownColumn
         /// The model or a content check declined the photo.
         case declined
         /// The answer ran out of room before it was complete.
@@ -192,7 +194,9 @@ public enum LabelReader {
             return value
         }
 
-        let column = label["column"] as? String
+        // Values without a known column could be per portion, so they are never taken as per 100 g.
+        guard let column = label["column"] as? String,
+              ["per_100g", "per_100ml", "per_portion"].contains(column) else { throw Problem.unknownColumn }
         let portionGrams = amount("portion_grams").flatMap { $0 > 0 ? $0 : nil }
         var factor = 1.0
         if column == "per_portion" {
@@ -231,7 +235,8 @@ public enum LabelReader {
     Biteflux converts units itself.
 
     Use the per 100 g or per 100 ml column when the label has one, and say which in "column". \
-    Use "per_portion" only when the label gives values for a portion and nothing per 100 g or 100 ml.
+    Use "per_portion" only when the label gives values for a portion and nothing per 100 g or 100 ml. \
+    Set "column" to null when you can't see which column the values belong to.
 
     Dutch names: Energie is energy, Vetten or Vet is fat, waarvan verzadigd(e vetzuren) is saturated fat, \
     Koolhydraten is carbohydrates, waarvan suikers is sugars, Vezels or Voedingsvezel is fiber, \
