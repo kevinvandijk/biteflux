@@ -36,6 +36,7 @@ struct TodayView: View {
                                 MealCard(meal: meal, entries: mealEntries, onDelete: delete)
                             }
                         }
+                        nevoCredit
                     }
                 }
                 .padding(.horizontal, 20)
@@ -117,6 +118,19 @@ struct TodayView: View {
                 actionTitle: "Allow Apple Health",
                 action: allowHealth
             )
+        }
+    }
+
+    /// RIVM asks for its source line wherever values worked out from NEVO are shown.
+    @ViewBuilder
+    private var nevoCredit: some View {
+        let fromNEVO = today.filter { $0.productSource == .nevo }
+        if !fromNEVO.isEmpty {
+            Text(verbatim: (fromNEVO.count == today.count ? NEVO.attribution : NEVO.mixedAttribution) + ".")
+                .font(Ember.sans(12, relativeTo: .caption))
+                .foregroundStyle(Ember.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 4)
         }
     }
 

@@ -34,6 +34,9 @@ final class FoodEntry {
     /// The library product this was logged from. The entry keeps its own copy of the
     /// nutrients, so changing or removing the product never changes what you ate.
     var productID: UUID?
+    /// Where the product's values came from, kept here so the Today screen can name NEVO
+    /// as their source even after the product is removed.
+    var productSourceRawValue: String?
 
     init(
         name: String,
@@ -43,7 +46,8 @@ final class FoodEntry {
         meal: Meal,
         eatenAt: Date,
         nutrients: Nutrients,
-        productID: UUID? = nil
+        productID: UUID? = nil,
+        productSource: ProductSource? = nil
     ) {
         self.name = name
         self.brand = brand
@@ -60,11 +64,16 @@ final class FoodEntry {
         self.saturatedFatG = nutrients.saturatedFatG
         self.sodiumMg = nutrients.sodiumMg
         self.productID = productID
+        self.productSourceRawValue = productSource?.rawValue
     }
 
     var meal: Meal {
         get { Meal(rawValue: mealRawValue) ?? .snacks }
         set { mealRawValue = newValue.rawValue }
+    }
+
+    var productSource: ProductSource? {
+        productSourceRawValue.flatMap(ProductSource.init(rawValue:))
     }
 
     var syncState: SyncState {

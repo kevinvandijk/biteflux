@@ -2,8 +2,9 @@ import BitefluxCore
 import SwiftData
 import SwiftUI
 
-/// Your product library: look up a barcode on Open Food Facts, search what you've added,
-/// or add a product from its label, then log a portion. Scanning arrives in step 3.
+/// Your product library: look up a barcode on Open Food Facts, search what you've added and
+/// the Dutch food table (NEVO), or add a product from its label, then log a portion.
+/// Scanning arrives in step 3.
 struct AddFoodSheet: View {
     var onLog: (FoodEntry) -> Void
 
@@ -15,6 +16,7 @@ struct AddFoodSheet: View {
     @State private var barcodeText = ""
     @State private var lookingUp = false
     @State private var lookupProblem: String?
+    @State private var nevoFoods: [NEVO.Food] = []
 
     private let openFoodFacts = OpenFoodFactsClient()
 
@@ -37,7 +39,16 @@ struct AddFoodSheet: View {
             }
     }
 
+    /// NEVO foods matching the search, leaving out the ones already listed from your library.
+    private func nevoMatches(besides listed: [Product]) -> [NEVO.Food] {
+        guard !search.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        let listedCodes = Set(listed.filter { $0.source == .nevo }.compactMap(\.sourceCode))
+        return NEVO.search(search, in: nevoFoods.filter { !listedCodes.contains($0.code) })
+    }
+
     var body: some View {
+        let shown = self.shown
+        let nevoMatches = self.nevoMatches(besides: shown)
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -45,19 +56,37 @@ struct AddFoodSheet: View {
                         .font(Ember.serif(30))
                         .accessibilityAddTraits(.isHeader)
                     barcodeCard
-                    if !products.isEmpty {
+                    if !products.isEmpty || !nevoFoods.isEmpty {
                         searchField
                     }
                     if shown.isEmpty {
-                        emptyLibrary
+                        if nevoMatches.isEmpty {
+                            emptyLibrary
+                        }
                     } else {
+                        if !nevoMatches.isEmpty {
+                            sectionTitle("Your library")
+                        }
                         ForEach(shown) { product in
                             row(product)
                         }
                     }
+                    if !nevoMatches.isEmpty {
+                        sectionTitle("Dutch food table (NEVO)")
+                        ForEach(nevoMatches) { food in
+                            nevoRow(food)
+                        }
+                        Text(verbatim: NEVO.attribution + ".")
+                            .font(Ember.sans(12, relativeTo: .caption))
+                            .foregroundStyle(Ember.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     newProductButton
                 }
                 .padding(20)
+            }
+            .task {
+                nevoFoods = await NEVOTable.shared.foods()
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Ember.background)
@@ -120,7 +149,7 @@ struct AddFoodSheet: View {
     }
 
     private var searchField: some View {
-        TextField("Search your products", text: $search)
+        TextField(searchPrompt, text: $search)
             .font(Ember.sans(16))
             .autocorrectionDisabled()
             .padding(.horizontal, 14)
@@ -128,37 +157,46 @@ struct AddFoodSheet: View {
             .background(Ember.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    @ViewBuilder
     private var emptyLibrary: some View {
-        Text(products.isEmpty
-            ? "Your library is empty. Look up a barcode or add a product from its label, and it stays here for next time."
-            : "Nothing in your library matches \u{201C}\(search)\u{201D}.")
+        Text(verbatim: emptyText)
             .font(Ember.sans(15))
             .foregroundStyle(Ember.secondaryText)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.vertical, 8)
     }
 
+    private var searchPrompt: LocalizedStringKey {
+        nevoFoods.isEmpty ? "Search your products" : "Search your products and NEVO"
+    }
+
+    private var emptyText: String {
+        if products.isEmpty && search.trimmingCharacters(in: .whitespaces).isEmpty {
+            return nevoFoods.isEmpty
+                ? "Your library is empty. Look up a barcode or add a product from its label, and it stays here for next time."
+                : "Your library is empty. Look up a barcode, search for a food, or add a product from its label. What you log stays here for next time."
+        }
+        return nevoFoods.isEmpty
+            ? "Nothing in your library matches \u{201C}\(search)\u{201D}."
+            : "Nothing in your library or NEVO matches \u{201C}\(search)\u{201D}."
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(verbatim: title)
+            .font(Ember.sans(13, weight: .bold, relativeTo: .footnote))
+            .foregroundStyle(Ember.secondaryText)
+            .padding(.top, 8)
+            .accessibilityAddTraits(.isHeader)
+    }
+
     private func row(_ product: Product) -> some View {
         Button {
             path.append(.product(product))
         } label: {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: product.name)
-                        .font(Ember.sans(16, weight: .medium))
-                    Text(verbatim: [product.brand, "per 100 g"].compactMap { $0 }.joined(separator: " · "))
-                        .font(Ember.sans(13, relativeTo: .footnote))
-                        .foregroundStyle(Ember.secondaryText)
-                }
-                Spacer(minLength: 12)
-                Text(verbatim: "\(product.energyKcal.wholeNumber) kcal")
-                    .font(Ember.sans(15))
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Ember.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            rowLabel(
+                name: product.name,
+                detail: [product.brand, product.source == .nevo ? "NEVO" : nil, "per 100 g"],
+                kcal: product.energyKcal
+            )
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -166,6 +204,35 @@ struct AddFoodSheet: View {
                 remove(product)
             }
         }
+    }
+
+    /// A NEVO food opens like any product and joins your library when you log it.
+    private func nevoRow(_ food: NEVO.Food) -> some View {
+        Button {
+            path.append(.product(Product(food)))
+        } label: {
+            rowLabel(name: food.dutchName, detail: [food.englishName, "per 100 g"], kcal: food.per100g.energyKcal)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func rowLabel(name: String, detail: [String?], kcal: Double) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: name)
+                    .font(Ember.sans(16, weight: .medium))
+                Text(verbatim: detail.compactMap { $0 }.joined(separator: " · "))
+                    .font(Ember.sans(13, relativeTo: .footnote))
+                    .foregroundStyle(Ember.secondaryText)
+            }
+            Spacer(minLength: 12)
+            Text(verbatim: "\(kcal.wholeNumber) kcal")
+                .font(Ember.sans(15))
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Ember.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var newProductButton: some View {
@@ -224,30 +291,31 @@ struct AddFoodSheet: View {
         }
     }
 
-    /// A product from Open Food Facts joins your library the first time you log it.
+    /// A product from Open Food Facts or NEVO joins your library the first time you log it.
     private func log(_ product: Product, grams: Double, meal: Meal) {
-        if product.modelContext == nil {
-            context.insert(product)
-        }
+        let kept = product.modelContext == nil ? keep(product) : product
         let now = Date.now
-        product.lastLoggedAt = now
-        product.timesLogged += 1
-        onLog(product.entry(grams: grams, meal: meal, eatenAt: now))
+        kept.lastLoggedAt = now
+        kept.timesLogged += 1
+        onLog(kept.entry(grams: grams, meal: meal, eatenAt: now))
         dismiss()
     }
 
-    /// A barcode that is already in your library updates that product with what you just copied
-    /// from the label, so a later lookup can't find two versions with different values.
     private func saved(_ product: Product) {
-        var kept = product
-        if let barcode = product.barcode, let known = products.first(where: { $0.barcode == barcode }) {
-            known.takeValues(from: product)
-            kept = known
-        } else {
-            context.insert(product)
-        }
+        let kept = keep(product)
         try? context.save()
         path = [.product(kept)]
+    }
+
+    /// Adds a product to your library. When the library already has the same barcode or NEVO food,
+    /// that product takes the new values instead, so a later search can't find two versions.
+    private func keep(_ product: Product) -> Product {
+        if let known = products.first(where: { $0.isSameFood(as: product) }) {
+            known.takeValues(from: product)
+            return known
+        }
+        context.insert(product)
+        return product
     }
 
     /// Entries keep their own copy of the nutrients, so your log stays as it was.

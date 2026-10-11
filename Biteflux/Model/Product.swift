@@ -13,6 +13,8 @@ final class Product {
     var brand: String?
     var barcode: String?
     var sourceRawValue: String = ProductSource.own.rawValue
+    /// The food's code in its source table, like NEVO code "875".
+    var sourceCode: String?
 
     // Per 100 g, as on the label.
     var energyKcal: Double = 0
@@ -38,6 +40,7 @@ final class Product {
         brand: String? = nil,
         barcode: String? = nil,
         source: ProductSource,
+        sourceCode: String? = nil,
         per100g: Nutrients,
         servingGrams: Double? = nil,
         servingName: String? = nil
@@ -46,6 +49,7 @@ final class Product {
         self.brand = brand
         self.barcode = barcode
         self.sourceRawValue = source.rawValue
+        self.sourceCode = sourceCode
         self.energyKcal = per100g.energyKcal
         self.proteinG = per100g.proteinG
         self.carbohydratesG = per100g.carbohydratesG
@@ -87,12 +91,20 @@ final class Product {
         }
     }
 
+    /// Whether `other` is the same food: the same barcode, or the same code in the same table.
+    func isSameFood(as other: Product) -> Bool {
+        if let barcode, barcode == other.barcode { return true }
+        if let sourceCode, source == other.source, sourceCode == other.sourceCode { return true }
+        return false
+    }
+
     /// Takes over what `other` says about the product, keeping this one's identity and history,
-    /// so the same barcode never lives in the library twice.
+    /// so the same food never lives in the library twice.
     func takeValues(from other: Product) {
         name = other.name
         brand = other.brand
         sourceRawValue = other.sourceRawValue
+        sourceCode = other.sourceCode
         per100g = other.per100g
         servingGrams = other.servingGrams
         servingName = other.servingName
@@ -116,7 +128,8 @@ final class Product {
             meal: meal,
             eatenAt: eatenAt,
             nutrients: per100g.per100g(forPortionOf: grams),
-            productID: productID
+            productID: productID,
+            productSource: source
         )
     }
 }
@@ -134,5 +147,11 @@ extension Product {
             servingGrams: found.servingGrams,
             servingName: found.servingName ?? (found.servingGrams == nil ? nil : "1 serving")
         )
+    }
+
+    /// A food from the NEVO table, not yet in the library. Its values stay exactly as NEVO gives them,
+    /// as RIVM's conditions require.
+    convenience init(_ food: NEVO.Food) {
+        self.init(name: food.dutchName, source: .nevo, sourceCode: food.code, per100g: food.per100g)
     }
 }

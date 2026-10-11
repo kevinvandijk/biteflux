@@ -44,6 +44,12 @@ struct ProductView: View {
                 }
                 portionCard
                 NutrientTable(per100g: product.per100g, portion: portion, grams: grams)
+                if product.source == .nevo {
+                    Text(verbatim: NEVO.attribution + ".")
+                        .font(Ember.sans(13, relativeTo: .footnote))
+                        .foregroundStyle(Ember.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 logButton
             }
             .padding(20)

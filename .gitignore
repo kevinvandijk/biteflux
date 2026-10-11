@@ -9,3 +9,6 @@ build/
 .swiftpm/
 
 .DS_Store
+
+# The NEVO table: everyone downloads their own copy from RIVM (see README)
+Biteflux/NEVO/
