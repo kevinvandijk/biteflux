@@ -12,6 +12,7 @@
 
 /* Begin PBXFileReference section */
 		B1F1000000000000000000B1 /* Biteflux.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Biteflux.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1F1000000000000000000B2 /* BitefluxCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = BitefluxCore; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -37,6 +38,7 @@
 		B1F1000000000000000000E1 = {
 			isa = PBXGroup;
 			children = (
+				B1F1000000000000000000B2 /* BitefluxCore */,
 				B1F1000000000000000000C1 /* Biteflux */,
 				B1F1000000000000000000E2 /* Products */,
 			);
