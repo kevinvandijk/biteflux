@@ -8,7 +8,10 @@ struct TodayView: View {
     @Environment(EntryLogger.self) private var logger
     @Query(sort: \FoodEntry.eatenAt) private var entries: [FoodEntry]
     @AppStorage("dailyGoalKcal") private var goalKcal = 2300.0
-    @State private var addingFood = false
+    @State private var scanning = false
+    /// What the Scan screen found, opened in the library once the camera has closed.
+    @State private var afterScan: AddFoodRequest?
+    @State private var addFood: AddFoodRequest?
 
     private var today: [FoodEntry] {
         entries.filter { Calendar.current.isDateInToday($0.eatenAt) }
@@ -48,8 +51,14 @@ struct TodayView: View {
                 .padding(.bottom, 12)
         }
         .foregroundStyle(Ember.text)
-        .sheet(isPresented: $addingFood) {
-            AddFoodSheet(onLog: log)
+        .fullScreenCover(isPresented: $scanning, onDismiss: { addFood = afterScan; afterScan = nil }) {
+            ScanView(remainingKcal: summary.remainingKcal) { start in
+                afterScan = AddFoodRequest(start: start)
+                scanning = false
+            }
+        }
+        .sheet(item: $addFood) { request in
+            AddFoodSheet(start: request.start, onLog: log)
         }
     }
 
@@ -145,7 +154,7 @@ struct TodayView: View {
 
     private var scanButton: some View {
         Button {
-            addingFood = true
+            scanning = true
         } label: {
             Label("Scan something", systemImage: "viewfinder")
                 .font(Ember.sans(17, weight: .bold, relativeTo: .headline))
@@ -175,6 +184,11 @@ struct TodayView: View {
             await logger.syncUnconfirmed(in: context)
         }
     }
+}
+
+private struct AddFoodRequest: Identifiable {
+    let id = UUID()
+    var start: AddFoodSheet.Start?
 }
 
 private struct ProgressBar: View {

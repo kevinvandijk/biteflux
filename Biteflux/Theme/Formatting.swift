@@ -11,8 +11,9 @@ extension Double {
         formatted(.number.precision(.fractionLength(0...1)))
     }
 
-    /// The same, without thousands separators, to fill in a field that is read back as a number.
+    /// A number to fill in a field that is read back as one: no thousands separators, and up to
+    /// two decimals, so a label's "0,45 g" of salt stays as printed.
     var inputText: String {
-        formatted(.number.precision(.fractionLength(0...1)).grouping(.never))
+        formatted(.number.precision(.fractionLength(0...2)).grouping(.never))
     }
 }

@@ -207,6 +207,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Biteflux;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Biteflux reads barcodes, product names and nutrition labels with the camera.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Biteflux reads back the food it saved, to check it arrived in Apple Health.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Biteflux saves the food you log, with its nutrients, to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -241,6 +242,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Biteflux;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Biteflux reads barcodes, product names and nutrition labels with the camera.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Biteflux reads back the food it saved, to check it arrived in Apple Health.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Biteflux saves the food you log, with its nutrients, to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

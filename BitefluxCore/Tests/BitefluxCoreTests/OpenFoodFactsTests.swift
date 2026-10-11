@@ -117,4 +117,34 @@ final class OpenFoodFactsTests: XCTestCase {
         XCTAssertEqual(url.path, "/api/v2/product/3017624010701")
         XCTAssertTrue(url.query?.contains("fields=code,product_name") == true)
     }
+
+    func testSearchKeepsProductsWithABarcodeAndNameOnce() throws {
+        let products = try OpenFoodFacts.products(fromSearch: Data("""
+        {"count": 5, "page": 1, "products": [
+            {"code": "8710400015727", "product_name": "Pure hagelslag", "brands": "AH",
+             "serving_quantity": 20, "serving_quantity_unit": "g",
+             "nutriments": {"energy-kcal_100g": 435, "proteins_100g": 5.5, "carbohydrates_100g": 70,
+                            "fat_100g": 15, "salt_100g": 0.3}},
+            {"code": "3017624010701", "product_name": "Nutella", "nutriments": {}},
+            {"code": "3017624010701", "product_name": "Nutella 400 g"},
+            {"code": "12345", "product_name": "Not a real barcode"},
+            {"code": "5449000000996", "product_name": ""}
+        ]}
+        """.utf8))
+
+        XCTAssertEqual(products.map(\.barcode), ["8710400015727", "3017624010701"])
+        XCTAssertEqual(products[0].per100g?.energyKcal, 435)
+        XCTAssertEqual(products[0].servingGrams, 20)
+        XCTAssertEqual(products[1].name, "Nutella")
+        XCTAssertNil(products[1].per100g)
+    }
+
+    func testSearchURLAsksForTheSameFields() throws {
+        let url = OpenFoodFacts.searchURL(for: "pure hagelslag")
+        let items = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+
+        XCTAssertEqual(url.host, "world.openfoodfacts.org")
+        XCTAssertEqual(items.first { $0.name == "search_terms" }?.value, "pure hagelslag")
+        XCTAssertEqual(items.first { $0.name == "fields" }?.value, OpenFoodFacts.fields.joined(separator: ","))
+    }
 }

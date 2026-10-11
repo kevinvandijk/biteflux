@@ -4,10 +4,12 @@ An iPhone app that scans what you eat (a nutrition label, a barcode or a product
 keeps your food log, and saves every entry with its nutrients to Apple Health.
 The look follows the B4 "Ember" design: dark and warm, serif numbers, plain-language sync status.
 
-Built so far: the app skeleton, the Today screen and the Apple Health round trip (step 1), and the
-product library (step 2). Scanning comes in step 3; until then "Scan something" opens the library,
-where you look up a barcode by typing its number, search your products and the Dutch food table
-(NEVO), or add a product by copying its label.
+Built so far: the app skeleton, the Today screen and the Apple Health round trip (step 1), the
+product library (step 2), and scanning (step 3). "Scan something" opens the camera, which reads a
+barcode, a product name you tap on the pack, or a photo of the nutrition label. A barcode is looked
+up on Open Food Facts, a name is searched in your products, the Dutch food table (NEVO) and Open
+Food Facts, and a label photo fills in a new product for you to check. You can also type or search
+instead.
 
 ## Layout
 
@@ -20,10 +22,13 @@ where you look up a barcode by typing its number, search your products and the D
   - `Library/` is the product library: barcode lookup on Open Food Facts, NEVO search, your own
     products, and the screen where you pick a portion and log it. Products keep nutrients per
     100 g; each entry keeps its own copy, so editing or removing a product never changes your log.
+  - `Scan/` is the Scan screen (Apple's live text and barcode scanner) and label reading with
+    Claude.
   - `Today/` is the Today screen, `Theme/` the Ember colours and fonts.
 - `BitefluxCore/` is a Swift package with the logic that doesn't need a phone: nutrient maths,
   kJ to kcal, salt to sodium, the meal for a time of day, the day's totals, reading Open Food Facts
-  answers and the NEVO table, barcode check digits, and search.
+  answers and the NEVO table, the label reading request and answer, barcode check digits, and
+  search.
 
 ## Build and test
 
@@ -45,13 +50,24 @@ NEVO_CSV=Biteflux/NEVO/NEVO2025_v9.0.csv swift test --package-path BitefluxCore
 
 The Apple Health round trip works in the iOS Simulator too: log a food, allow access, and it shows
 up in the Simulator's Health app under Browse, Nutrition. Barcode lookups need an internet
-connection; 3017624010701 (Nutella) is a known product to try.
+connection; 3017624010701 (Nutella) is a known product to try. The Simulator has no camera, so the
+Scan screen offers to read a label from a photo instead.
+
+## Reading labels
+
+Label photos are read by Claude, Anthropic's AI model, through the Anthropic API with your own API
+key. The first time you read a label, Biteflux asks for the key (get one at
+[console.anthropic.com](https://console.anthropic.com/settings/keys)) and keeps it in the
+iPhone's Keychain; it is never part of this repository. Each photo costs a little on your Anthropic
+account. Claude copies the numbers as printed, Biteflux works them out per 100 g, and values Claude
+could only partly read are highlighted in the product form for you to check.
 
 ## Data sources
 
-Barcode lookups use [Open Food Facts](https://world.openfoodfacts.org), whose data is available
-under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/). Its values are
-crowd-sourced, so Biteflux shows them for a check against the label before you log a product.
+Barcode lookups and product name searches use [Open Food Facts](https://world.openfoodfacts.org),
+whose data is available under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/).
+Its values are crowd-sourced, so Biteflux shows them for a check against the label before you log a
+product.
 
 Unbranded foods come from [NEVO-online](https://www.rivm.nl/en/dutch-food-composition-database),
 the Dutch food composition table by RIVM. Based on data from NEVO online version 2025/9.0, RIVM,
