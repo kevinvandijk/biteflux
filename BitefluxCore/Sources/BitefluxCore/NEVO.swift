@@ -20,15 +20,28 @@ public enum NEVO {
         public var dutchName: String
         public var englishName: String?
         public var synonym: String?
+        /// NEVO's food group, like "Brood", which search uses to rank foods.
+        public var group: String?
+        public var englishGroup: String?
         public var per100g: Nutrients
 
         public var id: String { code }
 
-        public init(code: String, dutchName: String, englishName: String?, synonym: String?, per100g: Nutrients) {
+        public init(
+            code: String,
+            dutchName: String,
+            englishName: String?,
+            synonym: String?,
+            group: String? = nil,
+            englishGroup: String? = nil,
+            per100g: Nutrients
+        ) {
             self.code = code
             self.dutchName = dutchName
             self.englishName = englishName
             self.synonym = synonym
+            self.group = group
+            self.englishGroup = englishGroup
             self.per100g = per100g
         }
     }
@@ -62,6 +75,8 @@ public enum NEVO {
         let dutchColumn = try namedColumn("Voedingsmiddelnaam/Dutch food name")
         let englishColumn = try namedColumn("Engelse naam/Food name")
         let synonymColumn = try namedColumn("Synoniem")
+        let groupColumn = try namedColumn("Voedingsmiddelgroep")
+        let englishGroupColumn = try namedColumn("Food group")
         let quantityColumn = try namedColumn("Hoeveelheid/Quantity")
         let kcal = try nutrientColumn("ENERCC")
         let protein = try nutrientColumn("PROT")
@@ -95,6 +110,8 @@ public enum NEVO {
                 dutchName: dutchName,
                 englishName: text(englishColumn),
                 synonym: text(synonymColumn),
+                group: text(groupColumn),
+                englishGroup: text(englishGroupColumn),
                 per100g: Nutrients(
                     energyKcal: energyKcal,
                     proteinG: proteinG,
@@ -109,33 +126,52 @@ public enum NEVO {
         }
     }
 
-    /// Foods whose Dutch name, English name or synonym holds every word of `query`.
-    /// Names that begin with the query as a whole word come first, then names that begin
-    /// with it at all, then names with a word that begins with it, then the rest, each in
-    /// table order. So "appel" lists "Appel m schil gem", then "Appelstroop", then
-    /// "Taart appel", and only then "Aardappelen", where "appel" sits inside a word.
+    /// Foods whose Dutch name, English name or synonym holds every word of `query`, best first:
+    /// 1. names that are the query or begin with it as a whole word, like "Appel z schil gem";
+    /// 2. names with the query as a whole word, or foods in a group named by it, so "brood"
+    ///    finds "Tarwebrood bruin" in the group "Brood";
+    /// 3. names with a word that begins with the query, like "Appelstroop";
+    /// 4. the rest, like "Aardappelen" for "appel".
+    /// Within each, names where the query ends a word come first, because in Dutch that's what
+    /// the food is ("tarwebrood" is bread, "broodje" a roll), and then NEVO's own order.
     public static func search(_ query: String, in foods: [Food], limit: Int = 20) -> [Food] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
         let folded = fold(trimmed)
-        let queryWords = folded.split(whereSeparator: \.isWhitespace)
+        let queryWords = words(folded)
 
-        func rank(_ food: Food) -> Int {
+        func score(_ food: Food) -> (fit: Int, notAWordEnd: Int) {
             let names = [food.dutchName, food.englishName, food.synonym].compactMap { $0.map(fold) }
-            if names.contains(where: { $0 == folded || $0.hasPrefix(folded + " ") }) { return 0 }
-            if names.contains(where: { $0.hasPrefix(folded) }) { return 1 }
-            let nameWords = names.flatMap { name in name.split { !$0.isLetter && !$0.isNumber } }
-            if queryWords.allSatisfy({ word in nameWords.contains { $0.hasPrefix(word) } }) { return 2 }
-            return 3
+            let nameWords = names.flatMap(words)
+            let groupWords = [food.group, food.englishGroup].compactMap { $0.map(fold) }.flatMap(words)
+            let fit: Int
+            if names.contains(where: { $0 == folded || $0.hasPrefix(folded + " ") }) {
+                fit = 0
+            } else if queryWords.allSatisfy({ nameWords.contains($0) || groupWords.contains($0) }) {
+                fit = 1
+            } else if queryWords.allSatisfy({ word in nameWords.contains { $0.hasPrefix(word) } }) {
+                fit = 2
+            } else {
+                fit = 3
+            }
+            let endsAWord = queryWords.allSatisfy { word in nameWords.contains { $0.hasSuffix(word) } }
+            return (fit, endsAWord ? 0 : 1)
         }
 
         return foods
             .filter { SearchText.matches(trimmed, in: [$0.dutchName, $0.englishName, $0.synonym]) }
             .enumerated()
-            .map { (rank: rank($0.element), offset: $0.offset, food: $0.element) }
-            .sorted { ($0.rank, $0.offset) < ($1.rank, $1.offset) }
+            .map { (score: score($0.element), offset: $0.offset, food: $0.element) }
+            .sorted { a, b in
+                (a.score.fit, a.score.notAWordEnd, a.offset) < (b.score.fit, b.score.notAWordEnd, b.offset)
+            }
             .prefix(limit)
             .map { $0.food }
+    }
+
+    /// The words in `text`, split on spaces and punctuation, so "Sap appel-" holds "appel".
+    private static func words(_ text: String) -> [String] {
+        text.split { !$0.isLetter && !$0.isNumber }.map(String.init)
     }
 
     private static func fold(_ text: String) -> String {

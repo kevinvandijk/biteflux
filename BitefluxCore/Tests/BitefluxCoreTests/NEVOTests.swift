@@ -20,12 +20,15 @@ final class NEVOTests: XCTestCase {
             dutchName: "Appel m schil gem",
             englishName: "Apple w skin av",
             synonym: nil,
+            group: "Fruit",
+            englishGroup: "Fruit",
             per100g: Nutrients(
                 energyKcal: 56, proteinG: 0.3, carbohydratesG: 12, sugarG: 10.4, fiberG: 2,
                 fatG: 0.2, saturatedFatG: 0, sodiumMg: 1
             )
         ))
         XCTAssertEqual(foods[2].synonym, "Rinse appelstroop")
+        XCTAssertEqual(foods[1].group, "Brood")
         XCTAssertNil(foods[2].per100g.fiberG)
     }
 
@@ -45,21 +48,37 @@ final class NEVOTests: XCTestCase {
     }
 
     func testSearchPutsWholeWordsBeforePartsOfWords() {
-        func food(_ code: String, _ name: String) -> NEVO.Food {
-            NEVO.Food(
-                code: code, dutchName: name, englishName: nil, synonym: nil,
-                per100g: Nutrients(energyKcal: 0, proteinG: 0, carbohydratesG: 0, fatG: 0)
-            )
-        }
         let foods = [
-            food("1", "Aardappelen gekookt"),
-            food("2", "Taart appel"),
-            food("3", "Appelmoes"),
-            food("4", "Appel z schil gem"),
+            food("1", "Aardappelen gekookt", group: "Aardappelen en knolgewassen"),
+            food("2", "Appelmoes", group: "Fruit"),
+            food("3", "Taart appel-", group: "Gebak en koek"),
+            food("4", "Appel z schil gem", group: "Fruit"),
         ]
 
         XCTAssertEqual(NEVO.search("appel", in: foods).map(\.code), ["4", "3", "2", "1"])
         XCTAssertEqual(NEVO.search("appel", in: foods, limit: 3).map(\.code), ["4", "3", "2"])
+    }
+
+    /// Dutch breads are compound words ending in "brood", so the group "Brood" lifts them
+    /// above rolls and other foods that only begin with it.
+    func testSearchCountsTheFoodGroup() {
+        let foods = [
+            food("1", "Broodje kaas", group: "Samengestelde gerechten"),
+            food("2", "Broodje krenten", group: "Brood"),
+            food("3", "Brooddeeg", group: "Graanproducten en bindmiddelen"),
+            food("4", "Tarwebrood bruin", group: "Brood"),
+            food("5", "Aardappelen gekookt", group: "Aardappelen en knolgewassen"),
+        ]
+
+        XCTAssertEqual(NEVO.search("brood", in: foods).map(\.code), ["4", "2", "1", "3"])
+        XCTAssertEqual(NEVO.search("appel", in: foods).map(\.code), ["5"])
+    }
+
+    private func food(_ code: String, _ name: String, group: String) -> NEVO.Food {
+        NEVO.Food(
+            code: code, dutchName: name, englishName: nil, synonym: nil, group: group,
+            per100g: Nutrients(energyKcal: 0, proteinG: 0, carbohydratesG: 0, fatG: 0)
+        )
     }
 
     /// Runs against the real export when NEVO_CSV points to it, for example:
