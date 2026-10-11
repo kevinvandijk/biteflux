@@ -10,7 +10,7 @@ struct BitefluxApp: App {
     init() {
         FontRegistration.registerBundledFonts()
         do {
-            container = try ModelContainer(for: FoodEntry.self)
+            container = try ModelContainer(for: FoodEntry.self, Product.self)
         } catch {
             fatalError("Couldn't open the food log: \(error)")
         }

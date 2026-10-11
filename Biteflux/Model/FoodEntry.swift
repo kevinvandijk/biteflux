@@ -31,8 +31,24 @@ final class FoodEntry {
     var syncProblem: String?
     /// The Apple Health food entry this was saved as, once a save succeeded.
     var healthFoodID: UUID?
+    /// The library product this was logged from. The entry keeps its own copy of the
+    /// nutrients, so changing or removing the product never changes what you ate.
+    var productID: UUID?
+    /// Where the product's values came from, kept here so the Today screen can name NEVO
+    /// as their source even after the product is removed.
+    var productSourceRawValue: String?
 
-    init(name: String, brand: String? = nil, portion: String, grams: Double, meal: Meal, eatenAt: Date, nutrients: Nutrients) {
+    init(
+        name: String,
+        brand: String? = nil,
+        portion: String,
+        grams: Double,
+        meal: Meal,
+        eatenAt: Date,
+        nutrients: Nutrients,
+        productID: UUID? = nil,
+        productSource: ProductSource? = nil
+    ) {
         self.name = name
         self.brand = brand
         self.portion = portion
@@ -47,11 +63,17 @@ final class FoodEntry {
         self.fatG = nutrients.fatG
         self.saturatedFatG = nutrients.saturatedFatG
         self.sodiumMg = nutrients.sodiumMg
+        self.productID = productID
+        self.productSourceRawValue = productSource?.rawValue
     }
 
     var meal: Meal {
         get { Meal(rawValue: mealRawValue) ?? .snacks }
         set { mealRawValue = newValue.rawValue }
+    }
+
+    var productSource: ProductSource? {
+        productSourceRawValue.flatMap(ProductSource.init(rawValue:))
     }
 
     var syncState: SyncState {
