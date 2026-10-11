@@ -14,7 +14,10 @@ final class EntryLogger {
     private let health: HealthStore
     private(set) var access: HealthStore.Access
 
-    init(health: HealthStore = HealthStore()) {
+    /// Pass `nil` for the real Apple Health store. A default argument can't create it,
+    /// because default arguments aren't evaluated on the main actor.
+    init(health: HealthStore? = nil) {
+        let health = health ?? HealthStore()
         self.health = health
         self.access = health.access
     }
