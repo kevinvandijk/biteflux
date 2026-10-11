@@ -1,7 +1,7 @@
 import Foundation
 
 /// Reads answers from the Open Food Facts product API (`/api/v2/product/<barcode>`) and its
-/// search by name.
+/// search service (search.openfoodfacts.org).
 ///
 /// Open Food Facts is crowd-sourced, so a product can lack values or carry wrong ones; the app
 /// shows what it found for a check against the label before using it.
@@ -21,18 +21,15 @@ public enum OpenFoodFacts {
         return components.url!
     }
 
-    /// A search by name. Open Food Facts allows 10 searches a minute, so the app only searches
-    /// when asked to.
+    /// A search by name on Open Food Facts' search service, which answers apps without an account
+    /// where the main site's search often turns them away. The app only searches when asked to.
     public static func searchURL(for terms: String) -> URL {
         var components = URLComponents()
         components.scheme = "https"
-        components.host = "world.openfoodfacts.org"
-        components.path = "/cgi/search.pl"
+        components.host = "search.openfoodfacts.org"
+        components.path = "/search"
         components.queryItems = [
-            URLQueryItem(name: "search_terms", value: terms),
-            URLQueryItem(name: "search_simple", value: "1"),
-            URLQueryItem(name: "action", value: "process"),
-            URLQueryItem(name: "json", value: "1"),
+            URLQueryItem(name: "q", value: terms),
             URLQueryItem(name: "page_size", value: "20"),
             URLQueryItem(name: "fields", value: fields.joined(separator: ",")),
         ]
@@ -104,9 +101,10 @@ public enum OpenFoodFacts {
     }
 
     /// Reads the answer to `searchURL(for:)`: the products with a valid barcode and a name.
+    /// The search service lists them under "hits", the main site's search under "products".
     public static func products(fromSearch data: Data) throws -> [Product] {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let products = root["products"] as? [[String: Any]] else {
+              let products = (root["hits"] ?? root["products"]) as? [[String: Any]] else {
             throw Problem.unreadableAnswer
         }
         // Open Food Facts can list the same barcode twice; the first one counts.
@@ -154,11 +152,14 @@ public enum OpenFoodFacts {
             .lazy
             .compactMap { text(product[$0]) }
             .first
-        let brand = (product["brands"] as? String)?
-            .split(separator: ",")
-            .lazy
-            .compactMap { text(String($0)) }
-            .first
+        // The product API sends brands as one comma-separated string, the search service as a list.
+        let brands: [Any]
+        if let listed = product["brands"] as? String {
+            brands = listed.split(separator: ",").map(String.init)
+        } else {
+            brands = product["brands"] as? [Any] ?? []
+        }
+        let brand = brands.lazy.compactMap { text($0) }.first
 
         let servingDescription = text(product["serving_size"])
         // serving_quantity is in grams or millilitres; older products only say which in serving_size.

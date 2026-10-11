@@ -139,12 +139,42 @@ final class OpenFoodFactsTests: XCTestCase {
         XCTAssertNil(products[1].per100g)
     }
 
+    func testSearchServiceHitsKeepProductsWithABarcodeAndNameOnce() throws {
+        // Trimmed from a real answer of search.openfoodfacts.org for "hagelslag".
+        let products = try OpenFoodFacts.products(fromSearch: Data("""
+        {"count": 26, "page": 1, "page_size": 20, "hits": [
+            {"code": "8713326030089", "brands": ["de nieuwe band"], "product_name": "hagelslag"},
+            {"code": "5400141333343", "brands": ["boni", " colruyt"], "product_name": "Vermicelles",
+             "product_name_nl": "Hagelslag",
+             "nutriments": {"energy-kcal_100g": 443, "proteins_100g": 4.8, "carbohydrates_100g": 66,
+                            "sugars_100g": 66, "fat_100g": 15, "saturated-fat_100g": 9.2, "salt_100g": 0.2}},
+            {"code": "8710400017653", "brands": ["Albert Heijn"], "product_name": "Mix Hagelslag",
+             "nutriments": {"energy-kcal_100g": 450, "proteins_100g": 3, "carbohydrates_100g": 76,
+                            "fat_100g": 14, "salt_100g": 0.1}},
+            {"code": "8710400017653", "brands": ["Albert Heijn"], "product_name": "Mix Hagelslag 400 g"},
+            {"code": "8710496979927", "brands": ["De Ruijter"], "product_name_en": "Intens puur hagelslag"},
+            {"code": "12345", "brands": ["Venz"], "product_name": "Not a real barcode"}
+        ]}
+        """.utf8))
+
+        XCTAssertEqual(products.map(\.barcode), ["8713326030089", "5400141333343", "8710400017653", "8710496979927"])
+        XCTAssertEqual(products[0].brand, "de nieuwe band")
+        XCTAssertNil(products[0].per100g)
+        XCTAssertEqual(products[1].name, "Vermicelles")
+        XCTAssertEqual(products[1].brand, "boni")
+        XCTAssertEqual(products[1].per100g?.energyKcal, 443)
+        XCTAssertEqual(products[2].name, "Mix Hagelslag")
+        XCTAssertEqual(products[3].name, "Intens puur hagelslag")
+    }
+
     func testSearchURLAsksForTheSameFields() throws {
         let url = OpenFoodFacts.searchURL(for: "pure hagelslag")
         let items = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
 
-        XCTAssertEqual(url.host, "world.openfoodfacts.org")
-        XCTAssertEqual(items.first { $0.name == "search_terms" }?.value, "pure hagelslag")
+        XCTAssertEqual(url.host, "search.openfoodfacts.org")
+        XCTAssertEqual(url.path, "/search")
+        XCTAssertEqual(items.first { $0.name == "q" }?.value, "pure hagelslag")
+        XCTAssertEqual(items.first { $0.name == "page_size" }?.value, "20")
         XCTAssertEqual(items.first { $0.name == "fields" }?.value, OpenFoodFacts.fields.joined(separator: ","))
     }
 }

@@ -1,8 +1,8 @@
 import BitefluxCore
 import Foundation
 
-/// Looks up barcodes and searches names on Open Food Facts. Reading needs no account; the API
-/// allows 15 lookups and 10 searches a minute and asks every app to name itself in its User-Agent.
+/// Looks up barcodes on Open Food Facts and searches names on its search service. Reading needs
+/// no account; the API allows 15 lookups a minute and asks every app to name itself in its User-Agent.
 struct OpenFoodFactsClient {
     enum Problem: LocalizedError {
         case offline
