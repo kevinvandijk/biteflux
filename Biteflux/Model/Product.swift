@@ -63,16 +63,39 @@ final class Product {
     }
 
     var per100g: Nutrients {
-        Nutrients(
-            energyKcal: energyKcal,
-            proteinG: proteinG,
-            carbohydratesG: carbohydratesG,
-            sugarG: sugarG,
-            fiberG: fiberG,
-            fatG: fatG,
-            saturatedFatG: saturatedFatG,
-            sodiumMg: sodiumMg
-        )
+        get {
+            Nutrients(
+                energyKcal: energyKcal,
+                proteinG: proteinG,
+                carbohydratesG: carbohydratesG,
+                sugarG: sugarG,
+                fiberG: fiberG,
+                fatG: fatG,
+                saturatedFatG: saturatedFatG,
+                sodiumMg: sodiumMg
+            )
+        }
+        set {
+            energyKcal = newValue.energyKcal
+            proteinG = newValue.proteinG
+            carbohydratesG = newValue.carbohydratesG
+            sugarG = newValue.sugarG
+            fiberG = newValue.fiberG
+            fatG = newValue.fatG
+            saturatedFatG = newValue.saturatedFatG
+            sodiumMg = newValue.sodiumMg
+        }
+    }
+
+    /// Takes over what `other` says about the product, keeping this one's identity and history,
+    /// so the same barcode never lives in the library twice.
+    func takeValues(from other: Product) {
+        name = other.name
+        brand = other.brand
+        sourceRawValue = other.sourceRawValue
+        per100g = other.per100g
+        servingGrams = other.servingGrams
+        servingName = other.servingName
     }
 
     /// How a portion of `grams` reads on the Today screen, like "1 koek (25 g)" or "150 g".

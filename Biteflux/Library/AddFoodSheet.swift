@@ -236,10 +236,18 @@ struct AddFoodSheet: View {
         dismiss()
     }
 
+    /// A barcode that is already in your library updates that product with what you just copied
+    /// from the label, so a later lookup can't find two versions with different values.
     private func saved(_ product: Product) {
-        context.insert(product)
+        var kept = product
+        if let barcode = product.barcode, let known = products.first(where: { $0.barcode == barcode }) {
+            known.takeValues(from: product)
+            kept = known
+        } else {
+            context.insert(product)
+        }
         try? context.save()
-        path = [.product(product)]
+        path = [.product(kept)]
     }
 
     /// Entries keep their own copy of the nutrients, so your log stays as it was.

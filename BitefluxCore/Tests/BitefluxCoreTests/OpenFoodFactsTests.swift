@@ -55,6 +55,29 @@ final class OpenFoodFactsTests: XCTestCase {
         XCTAssertNil(per100g.sugarG)
     }
 
+    func testServingInMillilitresIsLeftOut() throws {
+        func serving(_ fields: String) throws -> OpenFoodFacts.Product {
+            let result = try lookup(#"{"status": 1, "product": {"product_name": "Cola", "# + fields + "}}")
+            guard case let .found(product) = result else {
+                XCTFail("Expected a product")
+                throw OpenFoodFacts.Problem.unreadableAnswer
+            }
+            return product
+        }
+
+        let millilitres = try serving(#""serving_size": "330 ml", "serving_quantity": 330, "serving_quantity_unit": "ml""#)
+        XCTAssertNil(millilitres.servingGrams)
+        XCTAssertNil(millilitres.servingName)
+        XCTAssertEqual(millilitres.servingDescription, "330 ml")
+
+        // Older products have no unit; the serving text tells.
+        XCTAssertNil(try serving(#""serving_size": "1 glas (25cl)", "serving_quantity": 250"#).servingGrams)
+        XCTAssertNil(try serving(#""serving_size": "1 liter", "serving_quantity": 1000"#).servingGrams)
+        XCTAssertEqual(try serving(#""serving_size": "1 koek (25 g)", "serving_quantity": 25"#).servingGrams, 25)
+        XCTAssertEqual(try serving(#""serving_quantity": 30, "serving_quantity_unit": "g""#).servingGrams, 30)
+        XCTAssertEqual(try serving(#""serving_quantity": 30"#).servingGrams, 30)
+    }
+
     func testServingName() {
         func product(_ description: String?, grams: Double? = 25) -> OpenFoodFacts.Product {
             OpenFoodFacts.Product(barcode: "1", name: nil, brand: nil, per100g: nil, servingGrams: grams, servingDescription: description)

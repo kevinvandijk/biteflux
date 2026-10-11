@@ -8,7 +8,7 @@ public enum OpenFoodFacts {
     /// The fields Biteflux asks for, which keeps each answer small.
     public static let fields = [
         "code", "product_name", "product_name_nl", "product_name_en",
-        "brands", "nutriments", "serving_size", "serving_quantity",
+        "brands", "nutriments", "serving_size", "serving_quantity", "serving_quantity_unit",
     ]
 
     public static func productURL(barcode: String) -> URL {
@@ -35,6 +35,8 @@ public enum OpenFoodFacts {
         /// Nil when energy, protein, carbohydrates or fat is missing,
         /// so the values have to come from the label instead.
         public var per100g: Nutrients?
+        /// The weight of one serving. Nil when the pack gives none, or gives a volume like
+        /// 330 ml, since Biteflux logs portions in grams.
         public var servingGrams: Double?
         /// How the pack describes one serving, like "1 koek (25 g)".
         public var servingDescription: String?
@@ -119,14 +121,24 @@ public enum OpenFoodFacts {
             .compactMap { text(String($0)) }
             .first
 
+        let servingDescription = text(product["serving_size"])
+        // serving_quantity is in grams or millilitres; older products only say which in serving_size.
+        let servingIsWeight = text(product["serving_quantity_unit"]).map { $0.lowercased() == "g" }
+            ?? !(servingDescription.map(mentionsVolume) ?? false)
+
         return .found(Product(
             barcode: barcode,
             name: name,
             brand: brand,
             per100g: nutrients,
-            servingGrams: number(product["serving_quantity"]).flatMap { $0 > 0 ? $0 : nil },
-            servingDescription: text(product["serving_size"])
+            servingGrams: servingIsWeight ? number(product["serving_quantity"]).flatMap { $0 > 0 ? $0 : nil } : nil,
+            servingDescription: servingDescription
         ))
+    }
+
+    /// Whether a serving text gives a volume, like "330 ml" or "1 glas (25cl)".
+    private static func mentionsVolume(_ text: String) -> Bool {
+        text.range(of: #"\d\s*(ml|cl|dl|l|liter|litre)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     /// Open Food Facts sends most numbers as numbers, but some as strings.
