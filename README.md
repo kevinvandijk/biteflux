@@ -42,10 +42,11 @@ xcodebuild -project Biteflux.xcodeproj -scheme Biteflux \
   -destination 'platform=iOS Simulator,name=iPhone 16' build
 ```
 
-To check the parser against the real NEVO table as well, point `NEVO_CSV` at it:
+To check the parser against the real NEVO table as well, point `NEVO_CSV` at it. The tests run
+inside `BitefluxCore/`, so give the full path:
 
 ```sh
-NEVO_CSV=Biteflux/NEVO/NEVO2025_v9.0.csv swift test --package-path BitefluxCore
+NEVO_CSV="$PWD/Biteflux/NEVO/NEVO2025_v9.0.csv" swift test --package-path BitefluxCore
 ```
 
 The Apple Health round trip works in the iOS Simulator too: log a food, allow access, and it shows
