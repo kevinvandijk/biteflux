@@ -30,6 +30,8 @@ struct AddFoodSheet: View {
     @State private var searchedTerms: String?
     @State private var searching = false
     @State private var searchProblem: String?
+    /// The barcode of the search result being fetched in full.
+    @State private var opening: String?
 
     private let openFoodFacts = OpenFoodFactsClient()
 
@@ -249,15 +251,17 @@ struct AddFoodSheet: View {
 
     private func openFoodFactsRow(_ found: OpenFoodFacts.Product) -> some View {
         Button {
-            open(found)
+            openSearchResult(found)
         } label: {
             rowLabel(
                 name: found.name ?? found.barcode,
                 detail: [found.brand, found.per100g == nil ? "nutrition missing" : "per 100 g"],
                 kcal: found.per100g?.energyKcal
             )
+            .opacity(opening == found.barcode ? 0.5 : 1)
         }
         .buttonStyle(.plain)
+        .disabled(opening != nil)
     }
 
     private func row(_ product: Product) -> some View {
@@ -385,6 +389,21 @@ struct AddFoodSheet: View {
                 found: found,
                 note: "Open Food Facts knows this product but not all its nutrition. Copy the rest from the label."
             )))
+        }
+    }
+
+    /// The search service leaves out portion sizes, so a result is fetched by its barcode before it
+    /// opens. If that fails, it opens with what the search gave.
+    private func openSearchResult(_ found: OpenFoodFacts.Product) {
+        guard opening == nil else { return }
+        opening = found.barcode
+        Task {
+            defer { opening = nil }
+            if case let .found(full)? = try? await openFoodFacts.lookup(barcode: found.barcode) {
+                open(full)
+            } else {
+                open(found)
+            }
         }
     }
 

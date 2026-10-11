@@ -29,7 +29,9 @@ public enum OpenFoodFacts {
         components.host = "search.openfoodfacts.org"
         components.path = "/search"
         components.queryItems = [
-            URLQueryItem(name: "q", value: terms),
+            // The search service reads "word:" as a field name, so a colon read off a pack
+            // would find nothing.
+            URLQueryItem(name: "q", value: terms.replacingOccurrences(of: ":", with: " ")),
             URLQueryItem(name: "page_size", value: "20"),
             URLQueryItem(name: "fields", value: fields.joined(separator: ",")),
         ]

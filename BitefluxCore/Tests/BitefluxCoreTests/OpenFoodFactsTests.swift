@@ -177,4 +177,11 @@ final class OpenFoodFactsTests: XCTestCase {
         XCTAssertEqual(items.first { $0.name == "page_size" }?.value, "20")
         XCTAssertEqual(items.first { $0.name == "fields" }?.value, OpenFoodFacts.fields.joined(separator: ","))
     }
+
+    func testSearchLeavesOutColons() throws {
+        let url = OpenFoodFacts.searchURL(for: "AH: hagelslag")
+        let items = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+
+        XCTAssertEqual(items.first { $0.name == "q" }?.value, "AH  hagelslag")
+    }
 }
