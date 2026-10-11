@@ -8,7 +8,7 @@ struct TodayView: View {
     @Environment(EntryLogger.self) private var logger
     @Query(sort: \FoodEntry.eatenAt) private var entries: [FoodEntry]
     @AppStorage("dailyGoalKcal") private var goalKcal = 2300.0
-    @State private var choosingSample = false
+    @State private var addingFood = false
 
     private var today: [FoodEntry] {
         entries.filter { Calendar.current.isDateInToday($0.eatenAt) }
@@ -47,8 +47,8 @@ struct TodayView: View {
                 .padding(.bottom, 12)
         }
         .foregroundStyle(Ember.text)
-        .sheet(isPresented: $choosingSample) {
-            SampleFoodSheet(onPick: log)
+        .sheet(isPresented: $addingFood) {
+            AddFoodSheet(onLog: log)
         }
     }
 
@@ -131,7 +131,7 @@ struct TodayView: View {
 
     private var scanButton: some View {
         Button {
-            choosingSample = true
+            addingFood = true
         } label: {
             Label("Scan something", systemImage: "viewfinder")
                 .font(Ember.sans(17, weight: .bold, relativeTo: .headline))
@@ -143,17 +143,7 @@ struct TodayView: View {
         .background(Ember.text, in: Capsule())
     }
 
-    private func log(_ food: SampleFood) {
-        let now = Date.now
-        let entry = FoodEntry(
-            name: food.name,
-            brand: food.brand,
-            portion: food.portion,
-            grams: food.grams,
-            meal: Meal.suggested(at: now),
-            eatenAt: now,
-            nutrients: food.nutrients
-        )
+    private func log(_ entry: FoodEntry) {
         Task { await logger.log(entry, in: context) }
     }
 
