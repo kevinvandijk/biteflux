@@ -49,6 +49,15 @@ inside `BitefluxCore/`, so give the full path:
 NEVO_CSV="$PWD/Biteflux/NEVO/NEVO2025_v9.0.csv" swift test --package-path BitefluxCore
 ```
 
+To read real label photos the way the app does, put JPEG photos (at most 1568 pixels on the long
+side; `sips -Z 1568 *.jpg` makes them so) in a folder outside the repository and run the live test
+with your own OpenRouter key. Each photo costs a little on that key's account.
+
+```sh
+OPENROUTER_KEY=… LABEL_PHOTOS=/path/to/photos \
+  swift test --package-path BitefluxCore --filter LabelReaderLiveTests
+```
+
 The Apple Health round trip works in the iOS Simulator too: log a food, allow access, and it shows
 up in the Simulator's Health app under Browse, Nutrition. Barcode lookups need an internet
 connection; 3017624010701 (Nutella) is a known product to try. The Simulator has no camera, so the
