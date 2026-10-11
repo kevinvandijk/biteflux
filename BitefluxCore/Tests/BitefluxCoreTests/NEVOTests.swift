@@ -47,16 +47,19 @@ final class NEVOTests: XCTestCase {
         XCTAssertEqual(NEVO.search(" ", in: foods), [])
     }
 
-    func testSearchPutsWholeWordsBeforePartsOfWords() {
+    /// Orange juice ("sinaasappel", with the brand Appelsientje as its synonym) and potatoes
+    /// ("aardappel") only hold "appel" inside a word or in the synonym, so apple foods come first.
+    func testSearchPutsWordsBeforePartsOfWords() {
         let foods = [
-            food("1", "Aardappelen gekookt", group: "Aardappelen en knolgewassen"),
-            food("2", "Appelmoes", group: "Fruit"),
-            food("3", "Taart appel-", group: "Gebak en koek"),
-            food("4", "Appel z schil gem", group: "Fruit"),
+            food("1", "Sap sinaasappel-", synonym: "Sinaasappelsap Appelsientje", group: "Niet-alcoholische dranken"),
+            food("2", "Aardappelen gekookt", group: "Aardappelen en knolgewassen"),
+            food("3", "Appelmoes", group: "Fruit"),
+            food("4", "Taart appel-", group: "Gebak en koek"),
+            food("5", "Appel z schil gem", group: "Fruit"),
         ]
 
-        XCTAssertEqual(NEVO.search("appel", in: foods).map(\.code), ["4", "3", "2", "1"])
-        XCTAssertEqual(NEVO.search("appel", in: foods, limit: 3).map(\.code), ["4", "3", "2"])
+        XCTAssertEqual(NEVO.search("appel", in: foods).map(\.code), ["5", "3", "4", "1", "2"])
+        XCTAssertEqual(NEVO.search("appel", in: foods, limit: 3).map(\.code), ["5", "3", "4"])
     }
 
     /// Dutch breads are compound words ending in "brood", so the group "Brood" lifts them
@@ -70,13 +73,13 @@ final class NEVOTests: XCTestCase {
             food("5", "Aardappelen gekookt", group: "Aardappelen en knolgewassen"),
         ]
 
-        XCTAssertEqual(NEVO.search("brood", in: foods).map(\.code), ["4", "2", "1", "3"])
+        XCTAssertEqual(NEVO.search("brood", in: foods).map(\.code), ["4", "1", "2", "3"])
         XCTAssertEqual(NEVO.search("appel", in: foods).map(\.code), ["5"])
     }
 
-    private func food(_ code: String, _ name: String, group: String) -> NEVO.Food {
+    private func food(_ code: String, _ name: String, synonym: String? = nil, group: String) -> NEVO.Food {
         NEVO.Food(
-            code: code, dutchName: name, englishName: nil, synonym: nil, group: group,
+            code: code, dutchName: name, englishName: nil, synonym: synonym, group: group,
             per100g: Nutrients(energyKcal: 0, proteinG: 0, carbohydratesG: 0, fatG: 0)
         )
     }

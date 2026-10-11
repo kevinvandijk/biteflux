@@ -128,34 +128,36 @@ public enum NEVO {
 
     /// Foods whose Dutch name, English name or synonym holds every word of `query`, best first:
     /// 1. names that are the query or begin with it as a whole word, like "Appel z schil gem";
-    /// 2. names with the query as a whole word, or foods in a group named by it, so "brood"
-    ///    finds "Tarwebrood bruin" in the group "Brood";
-    /// 3. names with a word that begins with the query, like "Appelstroop";
-    /// 4. the rest, like "Aardappelen" for "appel".
-    /// Within each, names where the query ends a word come first, because in Dutch that's what
-    /// the food is ("tarwebrood" is bread, "broodje" a roll), and then NEVO's own order.
+    /// 2. names with a word that is or begins with the query, like "Taart appel-" or "Appelmoes",
+    ///    and foods in a group named by it, like "Tarwebrood bruin" in the group "Brood";
+    /// 3. the rest: the query inside a word ("Aardappelen") or only in the synonym.
+    /// Within each, foods in a group named by the query whose name ends with it come first,
+    /// because in Dutch that's what the food is ("tarwebrood" is bread, "broodje" a roll),
+    /// and then NEVO's own order.
     public static func search(_ query: String, in foods: [Food], limit: Int = 20) -> [Food] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
         let folded = fold(trimmed)
         let queryWords = words(folded)
 
-        func score(_ food: Food) -> (fit: Int, notAWordEnd: Int) {
-            let names = [food.dutchName, food.englishName, food.synonym].compactMap { $0.map(fold) }
+        func score(_ food: Food) -> (fit: Int, notInGroup: Int) {
+            let names = [food.dutchName, food.englishName].compactMap { $0.map(fold) }
             let nameWords = names.flatMap(words)
             let groupWords = [food.group, food.englishGroup].compactMap { $0.map(fold) }.flatMap(words)
             let fit: Int
             if names.contains(where: { $0 == folded || $0.hasPrefix(folded + " ") }) {
                 fit = 0
-            } else if queryWords.allSatisfy({ nameWords.contains($0) || groupWords.contains($0) }) {
+            } else if queryWords.allSatisfy({ word in
+                groupWords.contains(word) || nameWords.contains { $0.hasPrefix(word) }
+            }) {
                 fit = 1
-            } else if queryWords.allSatisfy({ word in nameWords.contains { $0.hasPrefix(word) } }) {
-                fit = 2
             } else {
-                fit = 3
+                fit = 2
             }
-            let endsAWord = queryWords.allSatisfy { word in nameWords.contains { $0.hasSuffix(word) } }
-            return (fit, endsAWord ? 0 : 1)
+            let namedByGroup = queryWords.contains { word in
+                groupWords.contains(word) && nameWords.contains { $0.hasSuffix(word) }
+            }
+            return (fit, namedByGroup ? 0 : 1)
         }
 
         return foods
@@ -163,7 +165,7 @@ public enum NEVO {
             .enumerated()
             .map { (score: score($0.element), offset: $0.offset, food: $0.element) }
             .sorted { a, b in
-                (a.score.fit, a.score.notAWordEnd, a.offset) < (b.score.fit, b.score.notAWordEnd, b.offset)
+                (a.score.fit, a.score.notInGroup, a.offset) < (b.score.fit, b.score.notInGroup, b.offset)
             }
             .prefix(limit)
             .map { $0.food }
