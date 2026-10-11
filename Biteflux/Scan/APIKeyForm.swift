@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Asks for the Anthropic API key that label reading runs on.
+/// Asks for the OpenRouter key that label reading runs on.
 struct APIKeyForm: View {
     var onSave: () -> Void
 
@@ -12,19 +12,19 @@ struct APIKeyForm: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Biteflux reads labels with Claude, Anthropic's AI model. Each photo costs a few cents or less on your own Anthropic account.")
-                    Link("Get a key at console.anthropic.com", destination: URL(string: "https://console.anthropic.com/settings/keys")!)
+                    Text("Biteflux reads labels with GPT Luna 6, through OpenRouter. Each photo costs a fraction of a cent on your own OpenRouter account.")
+                    Link("Get a key at openrouter.ai", destination: URL(string: "https://openrouter.ai/settings/keys")!)
                         .foregroundStyle(Ember.accent)
                 }
                 .listRowBackground(Ember.surface)
                 Section {
-                    SecureField("sk-ant-…", text: $key)
+                    SecureField("sk-or-…", text: $key)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
-                    Text("API key")
+                    Text("OpenRouter key")
                 } footer: {
-                    Text("The key stays in this iPhone's Keychain and is only sent to Anthropic, with a label photo.")
+                    Text("The key stays in this iPhone's Keychain and is only sent to OpenRouter, with a label photo.")
                 }
                 .listRowBackground(Ember.surface)
                 if let problem {
@@ -39,7 +39,7 @@ struct APIKeyForm: View {
             .foregroundStyle(Ember.text)
             .scrollContentBackground(.hidden)
             .background(Ember.background)
-            .navigationTitle("Read labels with Claude")
+            .navigationTitle("Read labels")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -56,8 +56,8 @@ struct APIKeyForm: View {
 
     private func save() {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.hasPrefix("sk-ant-") else {
-            problem = "That doesn't look like an Anthropic API key. Keys start with sk-ant-."
+        guard trimmed.hasPrefix("sk-or-") else {
+            problem = "That doesn't look like an OpenRouter key. Keys start with sk-or-."
             return
         }
         guard APIKeyStore.save(trimmed) else {

@@ -1,12 +1,12 @@
 import Foundation
 import Security
 
-/// Keeps your Anthropic API key in the iPhone Keychain. It stays on this phone, isn't backed up
-/// to other devices, and is only sent to Anthropic with a label photo.
+/// Keeps your OpenRouter key in the iPhone Keychain. It stays on this phone, isn't backed up
+/// to other devices, and is only sent to OpenRouter with a label photo.
 enum APIKeyStore {
     private static let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: "com.kevinvandijk.biteflux.anthropic",
+        kSecAttrService as String: "com.kevinvandijk.biteflux.openrouter",
         kSecAttrAccount as String: "api-key",
     ]
 

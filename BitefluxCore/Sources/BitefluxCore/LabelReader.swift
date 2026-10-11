@@ -1,23 +1,25 @@
 import Foundation
 
-/// Reads a nutrition label from a photo with Claude, through Anthropic's Messages API.
+/// Reads a nutrition label from a photo with OpenAI's GPT-6 Luna, through OpenRouter's chat
+/// completions API.
 ///
-/// This builds the request and reads the answer; the app sends it with the user's own API key.
-/// Claude copies the numbers as printed, and Biteflux does the unit conversions itself, the same
-/// way it does for Open Food Facts.
+/// This builds the request and reads the answer; the app sends it with the user's own OpenRouter
+/// key. The model copies the numbers as printed, and Biteflux does the unit conversions itself,
+/// the same way it does for Open Food Facts.
 public enum LabelReader {
-    public static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
-    public static let model = "claude-opus-5-5"
+    public static let endpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
+    /// GPT Luna 6 on OpenRouter: fast and cheap, and it reads images.
+    public static let model = "openai/gpt-6-luna"
 
-    /// The headers every request carries next to `x-api-key`.
+    /// The headers every request carries next to `Authorization`. OpenRouter uses the last two
+    /// to show which app sent a request.
     public static let headers = [
         "content-type": "application/json",
-        "anthropic-version": "2023-06-01",
-        // With "fallbacks": "default", a photo a safety check declines is retried on another model.
-        "anthropic-beta": "server-side-fallback-2026-07-01",
+        "HTTP-Referer": "https://github.com/kevinvandijk/biteflux",
+        "X-OpenRouter-Title": "Biteflux",
     ]
 
-    /// The label values Claude can flag as hard to read.
+    /// The label values the model can flag as hard to read.
     public enum Field: String, CaseIterable, Hashable, Sendable {
         case energy
         case fat
@@ -29,8 +31,8 @@ public enum LabelReader {
         case salt
     }
 
-    /// What Claude read from a label, per 100 g. A value is nil when the label doesn't list it
-    /// or Claude couldn't read it.
+    /// What the model read from a label, per 100 g. A value is nil when the label doesn't list it
+    /// or the model couldn't read it.
     public struct Reading: Equatable, Hashable, Sendable {
         public var name: String?
         public var brand: String?
@@ -51,7 +53,7 @@ public enum LabelReader {
         public var perMillilitre: Bool
         /// The label only gives values per portion, so these were worked out per 100 g.
         public var fromPortion: Bool
-        /// Values Claude could only partly read, through glare, blur or a cut-off photo.
+        /// Values the model could only partly read, through glare, blur or a cut-off photo.
         public var unsure: Set<Field>
 
         public init(
@@ -94,10 +96,12 @@ public enum LabelReader {
         case notALabel
         /// The label only gives values per portion and doesn't say what a portion weighs.
         case onlyPerPortion
-        /// A safety check declined the photo, on every model the API tried.
+        /// The model or a content check declined the photo.
         case declined
         /// The answer ran out of room before it was complete.
         case cutOff
+        /// The model stopped with an error partway through its answer.
+        case interrupted
         /// The answer wasn't what the request asked for.
         case unreadableAnswer
     }
@@ -106,55 +110,75 @@ public enum LabelReader {
     public static func requestBody(jpeg: Data) -> Data {
         let body: [String: Any] = [
             "model": model,
-            "max_tokens": 16_000,
-            "fallbacks": "default",
-            "output_config": [
-                // Copying numbers from a photo needs little reasoning, and a lower effort answers faster.
-                "effort": "low",
-                "format": ["type": "json_schema", "schema": answerSchema],
+            "max_completion_tokens": 16_000,
+            // Copying numbers from a photo needs little reasoning, and a lower effort answers faster.
+            "reasoning": ["effort": "low"],
+            "response_format": [
+                "type": "json_schema",
+                "json_schema": ["name": "nutrition_label", "strict": true, "schema": answerSchema],
             ],
-            "system": instructions,
-            "messages": [[
-                "role": "user",
-                "content": [
-                    [
-                        "type": "image",
-                        "source": [
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": jpeg.base64EncodedString(),
+            "messages": [
+                ["role": "system", "content": instructions],
+                [
+                    "role": "user",
+                    "content": [
+                        ["type": "text", "text": "Read this label."],
+                        [
+                            "type": "image_url",
+                            // High detail keeps the small print on a label readable.
+                            "image_url": [
+                                "url": "data:image/jpeg;base64,\(jpeg.base64EncodedString())",
+                                "detail": "high",
+                            ],
                         ],
                     ],
-                    ["type": "text", "text": "Read this label."],
                 ],
-            ]],
+            ],
         ]
         // The dictionary holds only JSON types, so this can't fail.
         return try! JSONSerialization.data(withJSONObject: body, options: [.sortedKeys, .withoutEscapingSlashes])
     }
 
-    /// Reads the API's answer to `requestBody(jpeg:)`.
+    /// Reads the API's answer to `requestBody(jpeg:)`: the label JSON in the first choice's message.
     public static func reading(fromAnswer data: Data) throws -> Reading {
-        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let content = root["content"] as? [[String: Any]] else {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
             throw Problem.unreadableAnswer
         }
-        switch root["stop_reason"] as? String {
-        case "refusal": throw Problem.declined
-        case "max_tokens": throw Problem.cutOff
+        // An error that happens while the model answers still comes with HTTP 200.
+        if root["error"] != nil { throw Problem.interrupted }
+        guard let choice = (root["choices"] as? [[String: Any]])?.first,
+              let message = choice["message"] as? [String: Any] else {
+            throw Problem.unreadableAnswer
+        }
+        if let refusal = message["refusal"] as? String,
+           !refusal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw Problem.declined
+        }
+        switch choice["finish_reason"] as? String {
+        case "content_filter": throw Problem.declined
+        case "length": throw Problem.cutOff
+        case "error": throw Problem.interrupted
         default: break
         }
-        let text = content
-            .filter { $0["type"] as? String == "text" }
-            .compactMap { $0["text"] as? String }
-            .joined()
+        // Content is a string; some providers send a list of text parts instead.
+        let text = (message["content"] as? String)
+            ?? (message["content"] as? [[String: Any]])?.compactMap { $0["text"] as? String }.joined()
+            ?? ""
         guard let label = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any] else {
             throw Problem.unreadableAnswer
         }
         return try reading(fromLabel: label)
     }
 
-    /// Turns the label as Claude copied it into values per 100 g.
+    /// Whether an error answer (HTTP 403) means OpenRouter's moderation flagged the photo,
+    /// rather than the key not being allowed to spend.
+    public static func wasFlagged(errorAnswer data: Data) -> Bool {
+        let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let metadata = (root?["error"] as? [String: Any])?["metadata"] as? [String: Any]
+        return (metadata?["reasons"] as? [Any])?.isEmpty == false || metadata?["flagged_input"] != nil
+    }
+
+    /// Turns the label as the model copied it into values per 100 g.
     static func reading(fromLabel label: [String: Any]) throws -> Reading {
         guard label["is_nutrition_label"] as? Bool == true else { throw Problem.notALabel }
 

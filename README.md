@@ -23,7 +23,7 @@ instead.
     products, and the screen where you pick a portion and log it. Products keep nutrients per
     100 g; each entry keeps its own copy, so editing or removing a product never changes your log.
   - `Scan/` is the Scan screen (Apple's live text and barcode scanner) and label reading with
-    Claude.
+    GPT Luna 6 through OpenRouter.
   - `Today/` is the Today screen, `Theme/` the Ember colours and fonts.
 - `BitefluxCore/` is a Swift package with the logic that doesn't need a phone: nutrient maths,
   kJ to kcal, salt to sodium, the meal for a time of day, the day's totals, reading Open Food Facts
@@ -56,12 +56,13 @@ Scan screen offers to read a label from a photo instead.
 
 ## Reading labels
 
-Label photos are read by Claude, Anthropic's AI model, through the Anthropic API with your own API
-key. The first time you read a label, Biteflux asks for the key (get one at
-[console.anthropic.com](https://console.anthropic.com/settings/keys)) and keeps it in the
-iPhone's Keychain; it is never part of this repository. Each photo costs a little on your Anthropic
-account. Claude copies the numbers as printed, Biteflux works them out per 100 g, and values Claude
-could only partly read are highlighted in the product form for you to check.
+Label photos are read by OpenAI's GPT Luna 6 (`openai/gpt-6-luna`) through
+[OpenRouter](https://openrouter.ai), with your own OpenRouter key. The first time you read a label,
+Biteflux asks for the key (get one at [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys))
+and keeps it in the iPhone's Keychain; it is never part of this repository. Each photo costs a
+fraction of a cent on your OpenRouter account. The model copies the numbers as printed, Biteflux
+works them out per 100 g, and values the model could only partly read are highlighted in the
+product form for you to check.
 
 ## Data sources
 

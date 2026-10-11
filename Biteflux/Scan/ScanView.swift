@@ -216,7 +216,7 @@ struct ScanView: View {
     private var readingCard: some View {
         VStack(spacing: 12) {
             ProgressView().tint(Ember.accent)
-            Text("Claude is reading the label…")
+            Text("Reading the label…")
                 .font(Ember.sans(15))
         }
         .padding(24)

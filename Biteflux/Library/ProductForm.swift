@@ -17,7 +17,7 @@ struct ProductDraft: Hashable {
     var saturatedFat = ""
     var fiber = ""
     var salt = ""
-    /// Values Claude could only partly read from the photo, highlighted for a check.
+    /// Values the model could only partly read from the photo, highlighted for a check.
     var unsure: Set<LabelReader.Field> = []
     /// Why the form opened, shown above it.
     var note: String?
@@ -52,8 +52,8 @@ struct ProductDraft: Hashable {
         self.unsure = reading.unsure
 
         var note = reading.unsure.isEmpty
-            ? "Claude read these values from your photo. Check them against the label before you save."
-            : "Claude read these values from your photo. The highlighted ones were hard to read, so check them against the label."
+            ? "GPT Luna 6 read these values from your photo. Check them against the label before you save."
+            : "GPT Luna 6 read these values from your photo. The highlighted ones were hard to read, so check them against the label."
         if reading.fromPortion, let grams = reading.servingGrams {
             note += " The label only lists values per portion of \(grams.amount) g, so these are worked out per 100 g."
         }
@@ -140,7 +140,7 @@ struct ProductForm: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// A number row. A value Claude found hard to read shows in the accent colour until it's changed.
+    /// A number row. A value the model found hard to read shows in the accent colour until it's changed.
     private func amountField(_ name: String, unit: String, text: Binding<String>, field: LabelReader.Field? = nil) -> some View {
         let unsure = field.map { draft.unsure.contains($0) } ?? false
         return HStack {

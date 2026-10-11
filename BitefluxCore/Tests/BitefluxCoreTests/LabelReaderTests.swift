@@ -2,19 +2,24 @@ import XCTest
 @testable import BitefluxCore
 
 final class LabelReaderTests: XCTestCase {
-    /// An API answer in the Messages format, with the label JSON as Claude's text.
-    private func answer(_ label: String, stopReason: String = "end_turn") throws -> Data {
+    /// An OpenRouter chat completion, with the label JSON as the message content.
+    private func answer(_ label: String, finishReason: String = "stop", refusal: String? = nil) throws -> Data {
         try JSONSerialization.data(withJSONObject: [
-            "id": "msg_01", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
-            "stop_reason": stopReason,
-            "content": [
-                ["type": "thinking", "thinking": "", "signature": "sig"],
-                ["type": "text", "text": label],
-            ],
+            "id": "gen-01", "object": "chat.completion", "model": "openai/gpt-6-luna", "provider": "OpenAI",
+            "choices": [[
+                "index": 0,
+                "finish_reason": finishReason,
+                "message": [
+                    "role": "assistant",
+                    "content": label,
+                    "refusal": refusal.map { $0 as Any } ?? NSNull(),
+                    "reasoning": NSNull(),
+                ],
+            ]],
         ])
     }
 
-    /// A label as Claude copies it, with every field present as the schema requires.
+    /// A label as the model copies it, with every field present as the schema requires.
     private func label(_ values: [String: Any]) throws -> String {
         var label: [String: Any] = [
             "is_nutrition_label": true, "product_name": NSNull(), "brand": NSNull(), "column": "per_100g",
@@ -29,18 +34,26 @@ final class LabelReaderTests: XCTestCase {
     func testRequestAsksForTheLabelAsJSON() throws {
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: LabelReader.requestBody(jpeg: Data([1, 2, 3]))) as? [String: Any])
 
-        XCTAssertEqual(body["model"] as? String, "claude-opus-5-5")
-        XCTAssertEqual(body["fallbacks"] as? String, "default")
-        let format = try XCTUnwrap((body["output_config"] as? [String: Any])?["format"] as? [String: Any])
+        XCTAssertEqual(LabelReader.endpoint.absoluteString, "https://openrouter.ai/api/v1/chat/completions")
+        XCTAssertEqual(body["model"] as? String, "openai/gpt-6-luna")
+        XCTAssertEqual((body["reasoning"] as? [String: Any])?["effort"] as? String, "low")
+        let format = try XCTUnwrap(body["response_format"] as? [String: Any])
         XCTAssertEqual(format["type"] as? String, "json_schema")
-        let schema = try XCTUnwrap(format["schema"] as? [String: Any])
+        let jsonSchema = try XCTUnwrap(format["json_schema"] as? [String: Any])
+        XCTAssertEqual(jsonSchema["strict"] as? Bool, true)
+        let schema = try XCTUnwrap(jsonSchema["schema"] as? [String: Any])
+        XCTAssertEqual(schema["additionalProperties"] as? Bool, false)
         XCTAssertEqual((schema["required"] as? [String])?.count, (schema["properties"] as? [String: Any])?.count)
 
         let messages = try XCTUnwrap(body["messages"] as? [[String: Any]])
-        let image = try XCTUnwrap((messages.first?["content"] as? [[String: Any]])?.first)
-        let source = try XCTUnwrap(image["source"] as? [String: Any])
-        XCTAssertEqual(source["media_type"] as? String, "image/jpeg")
-        XCTAssertEqual(source["data"] as? String, "AQID")
+        XCTAssertEqual(messages.map { $0["role"] as? String }, ["system", "user"])
+        XCTAssertEqual(messages[0]["content"] as? String, LabelReader.instructions)
+        let parts = try XCTUnwrap(messages[1]["content"] as? [[String: Any]])
+        let image = try XCTUnwrap(parts.first { $0["type"] as? String == "image_url" }?["image_url"] as? [String: Any])
+        XCTAssertEqual(image["url"] as? String, "data:image/jpeg;base64,AQID")
+        XCTAssertEqual(image["detail"] as? String, "high")
+        XCTAssertNil(LabelReader.headers["x-api-key"])
+        XCTAssertNil(LabelReader.headers["anthropic-version"])
     }
 
     func testReadsADutchLabelPer100Gram() throws {
@@ -107,9 +120,34 @@ final class LabelReaderTests: XCTestCase {
         }
 
         XCTAssertEqual(problem(try answer(label(["is_nutrition_label": false]))), .notALabel)
-        XCTAssertEqual(problem(try answer("", stopReason: "refusal")), .declined)
-        XCTAssertEqual(problem(try answer(#"{"is_nutrition_la"#, stopReason: "max_tokens")), .cutOff)
+        XCTAssertEqual(problem(try answer("", refusal: "I can't help with that.")), .declined)
+        XCTAssertEqual(problem(try answer("", finishReason: "content_filter")), .declined)
+        XCTAssertEqual(problem(try answer(#"{"is_nutrition_la"#, finishReason: "length")), .cutOff)
+        XCTAssertEqual(problem(try answer("", finishReason: "error")), .interrupted)
         XCTAssertEqual(problem(try answer("Here is the label")), .unreadableAnswer)
         XCTAssertEqual(problem(Data("<html>".utf8)), .unreadableAnswer)
+        XCTAssertEqual(problem(Data(#"{"choices": []}"#.utf8)), .unreadableAnswer)
+        // An error while the model answers comes with HTTP 200 and no usable choice.
+        XCTAssertEqual(problem(Data(#"{"id": "gen-02", "error": {"code": 502, "message": "Provider returned error"}}"#.utf8)), .interrupted)
+    }
+
+    func testContentAsTextPartsIsRead() throws {
+        let text = try label(["energy_kcal": 402, "fat_g": 18, "carbohydrates_g": 49, "protein_g": 8.1])
+        let data = try JSONSerialization.data(withJSONObject: [
+            "choices": [["finish_reason": "stop", "message": ["role": "assistant", "content": [["type": "text", "text": text]]]]],
+        ])
+
+        XCTAssertEqual(try LabelReader.reading(fromAnswer: data).energyKcal, 402)
+    }
+
+    func testFlaggedPhotoIsToldApartFromALimitedKey() {
+        XCTAssertTrue(LabelReader.wasFlagged(errorAnswer: Data("""
+        {"error": {"code": 403, "message": "Input was flagged", "metadata": {"reasons": ["violence"],
+         "flagged_input": "…", "provider_name": "OpenAI", "model_slug": "openai/gpt-6-luna"}}}
+        """.utf8)))
+        XCTAssertFalse(LabelReader.wasFlagged(errorAnswer: Data("""
+        {"error": {"code": 403, "message": "Key limit exceeded", "metadata": {"limit_source": "openrouter_key_limit"}}}
+        """.utf8)))
+        XCTAssertFalse(LabelReader.wasFlagged(errorAnswer: Data("<html>".utf8)))
     }
 }

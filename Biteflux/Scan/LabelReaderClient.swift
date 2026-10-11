@@ -1,12 +1,14 @@
 import BitefluxCore
 import UIKit
 
-/// Sends a label photo to Claude with your own Anthropic API key and returns what it read.
-/// Each photo costs a little on your Anthropic account.
+/// Sends a label photo to GPT Luna 6 through OpenRouter with your own OpenRouter key and returns
+/// what it read. Each photo costs a fraction of a cent on your OpenRouter account.
 struct LabelReaderClient {
     enum Problem: LocalizedError {
         case noKey
         case keyRejected
+        case keyLimited
+        case outOfCredits
         case offline
         case busy
         case failed(status: Int)
@@ -16,13 +18,17 @@ struct LabelReaderClient {
         var errorDescription: String? {
             switch self {
             case .noKey:
-                "Add your Anthropic API key to read labels."
+                "Add your OpenRouter key to read labels."
             case .keyRejected:
-                "Anthropic didn't accept your API key. Check it, or add a new one."
+                "OpenRouter didn't accept your key. Check it, or add a new one."
+            case .keyLimited:
+                "OpenRouter didn't let this key read the label, for example because it reached its spending limit. Check the key at openrouter.ai."
+            case .outOfCredits:
+                "Your OpenRouter account is out of credits. Add credits at openrouter.ai, or copy the label by hand."
             case .offline:
                 "There's no internet connection, so the label can't be read. Copy it by hand instead."
             case .busy:
-                "Claude is busy right now. Try again in a minute."
+                "OpenRouter is busy right now. Try again in a minute."
             case let .failed(status):
                 "Reading the label didn't work (error \(status)). Try again, or copy it by hand."
             case .unusablePhoto:
@@ -32,9 +38,11 @@ struct LabelReaderClient {
             case .reading(.onlyPerPortion):
                 "The label only gives values per portion and doesn't say what a portion weighs. Copy it by hand."
             case .reading(.declined):
-                "Claude declined to read this photo. Copy the label by hand instead."
+                "This photo was declined. Copy the label by hand instead."
+            case .reading(.interrupted):
+                "Reading the label stopped partway. Try again, or copy it by hand."
             case .reading(.cutOff), .reading(.unreadableAnswer):
-                "Claude's answer couldn't be read. Try again, or copy the label by hand."
+                "The answer couldn't be read. Try again, or copy the label by hand."
             }
         }
     }
@@ -48,7 +56,7 @@ struct LabelReaderClient {
         var request = URLRequest(url: LabelReader.endpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = 90
-        request.setValue(key, forHTTPHeaderField: "x-api-key")
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         for (name, value) in LabelReader.headers {
             request.setValue(value, forHTTPHeaderField: name)
         }
@@ -70,9 +78,14 @@ struct LabelReaderClient {
             } catch let problem as LabelReader.Problem {
                 throw Problem.reading(problem)
             }
-        case 401, 403:
+        case 401:
             throw Problem.keyRejected
-        case 429, 500, 529:
+        case 402:
+            throw Problem.outOfCredits
+        case 403:
+            // OpenRouter answers 403 both for a flagged photo and for a key past its limit.
+            throw LabelReader.wasFlagged(errorAnswer: data) ? Problem.reading(.declined) : Problem.keyLimited
+        case 408, 429, 500, 502, 503, 504, 529:
             throw Problem.busy
         default:
             throw Problem.failed(status: status)
@@ -86,8 +99,8 @@ struct LabelReaderClient {
 }
 
 private extension UIImage {
-    /// The photo as JPEG, scaled so its long side is at most 1568 pixels, the most Claude uses.
-    /// Smaller photos upload faster and cost less.
+    /// The photo as JPEG, scaled so its long side is at most 1568 pixels, which keeps a label
+    /// readable. Smaller photos upload faster and cost less.
     func labelJPEG() -> Data? {
         let longSide = max(size.width, size.height) * scale
         guard longSide > 0 else { return nil }
