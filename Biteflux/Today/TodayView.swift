@@ -229,8 +229,9 @@ struct TodayView: View {
         Task { await logger.update(entry, in: context) { $0.apply(change, product: product) } }
     }
 
+    /// Also takes over food another device was meant to save, in case that device is gone.
     private func retry() {
-        Task { await logger.syncUnconfirmed(in: context) }
+        Task { await logger.syncUnconfirmed(in: context, takingOver: true) }
     }
 
     private func allowHealth() {

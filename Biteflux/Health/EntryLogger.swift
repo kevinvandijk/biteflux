@@ -27,16 +27,7 @@ final class EntryLogger {
         let health = health ?? HealthStore()
         self.health = health
         self.access = health.access
-        self.deviceID = deviceID ?? Self.installID()
-    }
-
-    /// A random ID for this install, kept in UserDefaults, which iCloud sync doesn't share.
-    private static func installID() -> String {
-        let key = "installID"
-        if let id = UserDefaults.standard.string(forKey: key) { return id }
-        let id = UUID().uuidString
-        UserDefaults.standard.set(id, forKey: key)
-        return id
+        self.deviceID = deviceID ?? InstallID.current()
     }
 
     /// Whether this device writes the entry to Apple Health. An entry another device logged is
@@ -121,12 +112,22 @@ final class EntryLogger {
     }
 
     /// Retries every entry Apple Health hasn't confirmed, for example when the app comes back to the front.
-    func syncUnconfirmed(in context: ModelContext) async {
+    ///
+    /// With `takingOver`, entries another device was meant to write become this device's, for when
+    /// that device is gone, like an old phone. Only a tap on "Try again" asks for that, because
+    /// if the other device is still around, both could write the same food.
+    func syncUnconfirmed(in context: ModelContext, takingOver: Bool = false) async {
         refreshAccess()
         let confirmed = SyncState.inHealth.rawValue
         let descriptor = FetchDescriptor<FoodEntry>(predicate: #Predicate<FoodEntry> { $0.syncStateRawValue != confirmed })
         guard let entries = try? context.fetch(descriptor) else { return }
         for entry in entries {
+            if takingOver, !entry.isDeleted, !writesHere(entry) {
+                entry.healthWriterID = deviceID
+                // The other device's Apple Health ID may never reach this one, so look the entry up
+                // by its Biteflux ID instead, and save it only if Apple Health doesn't have it.
+                entry.healthFoodID = nil
+            }
             await sync(entry, in: context)
         }
     }
