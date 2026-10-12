@@ -6,7 +6,9 @@ import SwiftUI
 struct TodayView: View {
     @Environment(\.modelContext) private var context
     @Environment(EntryLogger.self) private var logger
-    @Query(sort: \FoodEntry.eatenAt) private var entries: [FoodEntry]
+    /// Food deleted here that another device still has to remove from Apple Health stays hidden.
+    @Query(filter: #Predicate<FoodEntry> { $0.deletedAt == nil }, sort: \FoodEntry.eatenAt)
+    private var entries: [FoodEntry]
     @Query private var products: [Product]
     @AppStorage("dailyGoalKcal") private var goalKcal = DailyGoal.standardKcal
     @State private var scanning = false

@@ -148,7 +148,9 @@ struct EntrySheet: View {
                 dismiss()
             }
         } message: {
-            Text("It's removed from Apple Health too.")
+            Text(verbatim: logger.leavesToOtherDevice(entry)
+                ? "It's removed from Apple Health too, the next time Biteflux is open on the device that saved it."
+                : "It's removed from Apple Health too.")
         }
         .confirmationDialog("Save it from this iPhone?", isPresented: $confirmingTakeOver, titleVisibility: .visible) {
             Button("Save it from this iPhone") {

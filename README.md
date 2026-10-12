@@ -97,7 +97,9 @@ With sync on, the device that logged a food, or last changed it, is the one that
 Apple Health. Apple Health's own sync brings it to your other devices, so they leave it alone and
 nothing is counted twice. Each iPhone knows itself by an ID in its Keychain, which survives a
 reinstall. A change made on another device goes to Apple Health through the writer, until the
-writer has left the food alone for a day; then the device you change it on takes over. If food is
+writer has left the food alone for a day; then the device you change it on takes over. Deleting
+works the same way: the food disappears from Biteflux at once, and the writer removes it from Apple
+Health, or the device you deleted it on does once the writer has been quiet for a day. If food is
 stuck waiting for a device that's gone, like an old phone, tap it on Today: a day after that device
 last tried, "Save it from this iPhone" hands it to the phone you're using.
 
