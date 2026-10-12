@@ -95,7 +95,9 @@ developer account. To turn it on:
 
 With sync on, the device that logged a food, or last changed it, is the one that writes it to
 Apple Health. Apple Health's own sync brings it to your other devices, so they leave it alone and
-nothing is counted twice.
+nothing is counted twice. Each iPhone knows itself by an ID in its Keychain, which survives a
+reinstall. If food is stuck waiting for a device that's gone, like an old phone, "Try again" on
+Today hands it to the phone you're using.
 
 ## Data sources
 
