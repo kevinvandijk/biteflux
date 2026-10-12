@@ -19,6 +19,7 @@ struct TodayView: View {
     @State private var addFood: AddFoodRequest?
     @State private var editing: FoodEntry?
     @State private var settingGoal = false
+    @State private var showingSettings = false
     @State private var launched = false
 
     private var today: [FoodEntry] {
@@ -35,6 +36,20 @@ struct TodayView: View {
     }
 
     var body: some View {
+        NavigationStack {
+            dayScreen
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(isPresented: $showingSettings) {
+                    // Once Settings has gone, ask for anything that came up while it was open, as
+                    // a sheet's onDismiss does. Its disappearance comes after the way back has
+                    // finished, when Apple's permission sheet can show.
+                    SettingsView()
+                        .onDisappear(perform: askForHealthIfNeeded)
+                }
+        }
+    }
+
+    private var dayScreen: some View {
         ZStack(alignment: .bottom) {
             Ember.background.ignoresSafeArea()
 
@@ -108,10 +123,24 @@ struct TodayView: View {
     }
 
     private var header: some View {
-        Text(Date.now, format: .dateTime.weekday(.wide).day().month(.wide))
-            .font(Ember.sans(14, relativeTo: .subheadline))
-            .foregroundStyle(Ember.secondaryText)
-            .frame(minHeight: 44, alignment: .leading)
+        HStack {
+            Text(Date.now, format: .dateTime.weekday(.wide).day().month(.wide))
+                .font(Ember.sans(14, relativeTo: .subheadline))
+                .foregroundStyle(Ember.secondaryText)
+            Spacer(minLength: 12)
+            Button {
+                showingSettings = true
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .background(Ember.surface, in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
+        }
+        .frame(minHeight: 44)
     }
 
     /// Tap it to change the daily goal.
@@ -268,7 +297,8 @@ struct TodayView: View {
     /// brings in such a deletion, never while a sheet is opening or closing.
     private func askForHealthIfNeeded() {
         logger.refreshAccess()
-        guard logger.access == .notAsked, addFood == nil, editing == nil, !scanning, !settingGoal,
+        // Settings has sheets of its own that Today can't see, and its own button to allow access.
+        guard logger.access == .notAsked, addFood == nil, editing == nil, !scanning, !settingGoal, !showingSettings,
               entries.contains(where: { $0.syncState != .inHealth }) || hasDeletionToClear else { return }
         allowHealth()
     }
