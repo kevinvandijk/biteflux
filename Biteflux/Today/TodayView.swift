@@ -25,6 +25,11 @@ struct TodayView: View {
         entries.filter { Calendar.current.isDateInToday($0.eatenAt) }
     }
 
+    /// A deletion this device may remove from Apple Health: its own, or one whose writer went quiet.
+    private var hasDeletionToClear: Bool {
+        deletions.contains { !logger.leavesToOtherDevice($0) }
+    }
+
     private var summary: DaySummary {
         DaySummary(goalKcal: goalKcal, eaten: today.map(\.nutrients))
     }
@@ -66,7 +71,20 @@ struct TodayView: View {
                 askForHealthIfNeeded()
             }
         }
-        .fullScreenCover(isPresented: $scanning, onDismiss: { addFood = afterScan; afterScan = nil }) {
+        .onChange(of: hasDeletionToClear) { _, has in
+            // iCloud can bring in a deletion after Today has appeared, with no launch or closing
+            // sheet to act on it. Only deletions are watched: a food you log changes `entries` while
+            // the Add food sheet is still closing, when Apple's permission sheet can't show. A
+            // deletion made here never starts this, as it always waits for another device.
+            guard has else { return }
+            logger.refreshAccess()
+            if logger.access == .allowed {
+                retry()
+            } else {
+                askForHealthIfNeeded()
+            }
+        }
+        .fullScreenCover(isPresented: $scanning, onDismiss: afterScanning) {
             ScanView(remainingKcal: summary.remainingKcal) { start in
                 afterScan = AddFoodRequest(start: start)
                 scanning = false
@@ -84,7 +102,7 @@ struct TodayView: View {
                 onTakeOver: { takeOver(entry) }
             )
         }
-        .sheet(isPresented: $settingGoal) {
+        .sheet(isPresented: $settingGoal, onDismiss: askForHealthIfNeeded) {
             GoalSheet()
         }
     }
@@ -218,6 +236,16 @@ struct TodayView: View {
         Task { await logger.update(entry, in: context) { $0.apply(change, product: product) } }
     }
 
+    /// Opens what the Scan screen found, or, when it found nothing, asks for Apple Health access if
+    /// something came up while the camera was open.
+    private func afterScanning() {
+        addFood = afterScan
+        afterScan = nil
+        if addFood == nil {
+            askForHealthIfNeeded()
+        }
+    }
+
     private func retry() {
         Task { await logger.syncUnconfirmed(in: context) }
     }
@@ -236,13 +264,12 @@ struct TodayView: View {
 
     /// Asks for Apple Health access the first time food is waiting to go there, or a deleted food
     /// this device has to remove is waiting to leave it. Apple's permission sheet only shows once
-    /// nothing else is on screen, so this runs at launch and after a sheet has closed, never while
-    /// one is opening or closing.
+    /// nothing else is on screen, so this runs at launch, after a sheet has closed and when iCloud
+    /// brings in such a deletion, never while a sheet is opening or closing.
     private func askForHealthIfNeeded() {
         logger.refreshAccess()
-        guard logger.access == .notAsked, addFood == nil, editing == nil, !scanning,
-              entries.contains(where: { $0.syncState != .inHealth })
-                || deletions.contains(where: { !logger.leavesToOtherDevice($0) }) else { return }
+        guard logger.access == .notAsked, addFood == nil, editing == nil, !scanning, !settingGoal,
+              entries.contains(where: { $0.syncState != .inHealth }) || hasDeletionToClear else { return }
         allowHealth()
     }
 }
