@@ -9,6 +9,8 @@ struct TodayView: View {
     /// Food deleted here that another device still has to remove from Apple Health stays hidden.
     @Query(filter: #Predicate<FoodEntry> { $0.deletedAt == nil }, sort: \FoodEntry.eatenAt)
     private var entries: [FoodEntry]
+    /// Those hidden deletions, which may still have to leave Apple Health.
+    @Query(filter: #Predicate<FoodEntry> { $0.deletedAt != nil }) private var deletions: [FoodEntry]
     @Query private var products: [Product]
     @AppStorage("dailyGoalKcal") private var goalKcal = DailyGoal.standardKcal
     @State private var scanning = false
@@ -257,13 +259,15 @@ struct TodayView: View {
         }
     }
 
-    /// Asks for Apple Health access the first time food is waiting to go there. Apple's permission
-    /// sheet only shows once nothing else is on screen, so this runs at launch and after a sheet has
-    /// closed, never while one is opening or closing.
+    /// Asks for Apple Health access the first time food is waiting to go there, or a deleted food
+    /// this device has to remove is waiting to leave it. Apple's permission sheet only shows once
+    /// nothing else is on screen, so this runs at launch and after a sheet has closed, never while
+    /// one is opening or closing.
     private func askForHealthIfNeeded() {
         logger.refreshAccess()
         guard logger.access == .notAsked, addFood == nil, editing == nil, !scanning,
-              entries.contains(where: { $0.syncState != .inHealth }) else { return }
+              entries.contains(where: { $0.syncState != .inHealth })
+                || deletions.contains(where: { !logger.leavesToOtherDevice($0) }) else { return }
         allowHealth()
     }
 }
