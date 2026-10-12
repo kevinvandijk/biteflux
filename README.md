@@ -93,9 +93,9 @@ developer account. To turn it on:
 3. Before a TestFlight or App Store build, deploy the schema to production in the CloudKit Console;
    those builds use the production environment.
 
-Each device writes what it syncs to Apple Health only when Apple Health doesn't have it yet, but
-Apple Health syncs between devices on its own schedule. Log on one device at a time to be sure
-nothing lands there twice.
+With sync on, the device that logged a food, or last changed it, is the one that writes it to
+Apple Health. Apple Health's own sync brings it to your other devices, so they leave it alone and
+nothing is counted twice.
 
 ## Data sources
 
