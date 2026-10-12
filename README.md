@@ -90,7 +90,7 @@ The project is ready to archive: it has an app icon, a privacy manifest, the exp
 developer account:
 
 1. In Xcode, under Signing & Capabilities, pick the paid team. Xcode registers the bundle ID
-   `com.kevinvandijk.biteflux` with HealthKit.
+   `one.sqre.biteflux` with HealthKit.
 2. In [App Store Connect](https://appstoreconnect.apple.com), add a new app with that bundle ID.
    Under App Privacy, answer as the privacy manifest does: Photos are collected for app
    functionality, linked to the user (each upload carries their OpenRouter key) and not used for
@@ -110,7 +110,7 @@ a default, nothing is unique), but sync needs the iCloud capability, which needs
 developer account. To turn it on:
 
 1. In Xcode, under Signing & Capabilities, pick the paid team, add iCloud with CloudKit and a
-   container such as `iCloud.com.kevinvandijk.biteflux`, and add Background Modes with Remote
+   container such as `iCloud.one.sqre.biteflux`, and add Background Modes with Remote
    notifications.
 2. Set `BitefluxApp.iCloudContainer` to that container.
 3. Before a TestFlight or App Store build, deploy the schema to production in the CloudKit Console;

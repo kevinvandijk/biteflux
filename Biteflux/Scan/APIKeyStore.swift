@@ -6,7 +6,7 @@ import Security
 enum APIKeyStore {
     private static let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: "com.kevinvandijk.biteflux.openrouter",
+        kSecAttrService as String: "one.sqre.biteflux.openrouter",
         kSecAttrAccount as String: "api-key",
     ]
 
