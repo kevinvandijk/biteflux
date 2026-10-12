@@ -8,6 +8,8 @@ struct MealCard: View {
     var onEdit: (FoodEntry) -> Void
     var onDelete: (FoodEntry) -> Void
 
+    @Environment(EntryLogger.self) private var logger
+
     private var totalKcal: Double {
         entries.reduce(0) { $0 + $1.energyKcal }
     }
@@ -18,13 +20,16 @@ struct MealCard: View {
                 Text(verbatim: "\(meal.title) · \(totalKcal.wholeNumber)")
                     .font(Ember.sans(16, weight: .bold, relativeTo: .headline))
                 Spacer(minLength: 12)
-                MealStatus(states: entries.map(\.syncState))
+                MealStatus(
+                    states: entries.map(\.syncState),
+                    waitingElsewhere: entries.filter { $0.syncState == .waiting }.allSatisfy { !logger.writesHere($0) }
+                )
             }
             ForEach(entries) { entry in
                 Button {
                     onEdit(entry)
                 } label: {
-                    EntryRow(entry: entry)
+                    EntryRow(entry: entry, savedHere: logger.writesHere(entry))
                         .frame(minHeight: 32)
                         .contentShape(Rectangle())
                 }
@@ -46,6 +51,8 @@ struct MealCard: View {
 /// The meal's status in plain words, as in the design.
 private struct MealStatus: View {
     var states: [SyncState]
+    /// Every food still on its way is another device's to save.
+    var waitingElsewhere: Bool
 
     var body: some View {
         if states.contains(.failed) {
@@ -53,7 +60,7 @@ private struct MealStatus: View {
                 .font(Ember.sans(12, relativeTo: .caption))
                 .foregroundStyle(Ember.failed)
         } else if states.contains(.waiting) {
-            Text("Saving to Apple Health")
+            Text(waitingElsewhere ? "Waiting for another device" : "Saving to Apple Health")
                 .font(Ember.sans(12, relativeTo: .caption))
                 .foregroundStyle(Ember.pending)
         } else {
@@ -77,6 +84,8 @@ private struct StatusLabelStyle: LabelStyle {
 /// One food in a meal, with a note when Apple Health doesn't have it yet.
 private struct EntryRow: View {
     var entry: FoodEntry
+    /// Whether this device saves it to Apple Health, or another one does.
+    var savedHere: Bool
 
     private var label: String {
         entry.portion.isEmpty ? entry.name : "\(entry.name), \(entry.portion)"
@@ -85,7 +94,7 @@ private struct EntryRow: View {
     private var note: Text {
         switch entry.syncState {
         case .inHealth: Text(verbatim: "")
-        case .waiting: Text(verbatim: " · saving").foregroundColor(Ember.pending)
+        case .waiting: Text(verbatim: savedHere ? " · saving" : " · on another device").foregroundColor(Ember.pending)
         case .failed: Text(verbatim: " · not in Health").foregroundColor(Ember.failed)
         }
     }
