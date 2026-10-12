@@ -36,7 +36,9 @@ struct AddFoodSheet: View {
     private let openFoodFacts = OpenFoodFactsClient()
 
     enum Route: Hashable {
-        case product(Product)
+        /// A product to log. `barcode` is set only when it was found by looking up that barcode,
+        /// so "Not it?" can keep the barcode for the right product.
+        case product(Product, barcode: String? = nil)
         case newProduct(ProductDraft)
     }
 
@@ -121,9 +123,9 @@ struct AddFoodSheet: View {
             }
             .navigationDestination(for: Route.self) { route in
                 switch route {
-                case let .product(product):
+                case let .product(product, barcode):
                     MatchView(product: product, onLog: log) {
-                        path.append(.newProduct(ProductDraft(barcode: product.barcode, note: notItNote(for: product))))
+                        path.append(.newProduct(ProductDraft(barcode: barcode, note: notItNote(barcode: barcode))))
                     }
                 case let .newProduct(draft):
                     CreateView(draft: draft, onSave: saved)
@@ -338,7 +340,7 @@ struct AddFoodSheet: View {
         lookupProblem = nil
         if let known = products.first(where: { $0.barcode == barcode }) {
             barcodeText = ""
-            path.append(.product(known))
+            path.append(.product(known, barcode: barcode))
             return
         }
 
@@ -348,7 +350,7 @@ struct AddFoodSheet: View {
             do {
                 switch try await openFoodFacts.lookup(barcode: barcode) {
                 case let .found(found):
-                    open(found)
+                    open(found, lookedUp: barcode)
                 case .notFound:
                     path.append(.newProduct(ProductDraft(
                         barcode: barcode,
@@ -380,12 +382,13 @@ struct AddFoodSheet: View {
     }
 
     /// Opens a product from Open Food Facts: ready to log when it has full nutrition, otherwise
-    /// in the form to copy the rest from the label.
-    private func open(_ found: OpenFoodFacts.Product) {
+    /// in the form to copy the rest from the label. `barcode` is the barcode you looked up, if any;
+    /// a search result never passes one.
+    private func open(_ found: OpenFoodFacts.Product, lookedUp barcode: String? = nil) {
         if let known = products.first(where: { $0.barcode == found.barcode }) {
-            path.append(.product(known))
+            path.append(.product(known, barcode: barcode))
         } else if let product = Product(found) {
-            path.append(.product(product))
+            path.append(.product(product, barcode: barcode))
         } else {
             path.append(.newProduct(ProductDraft(
                 found: found,
@@ -447,8 +450,8 @@ struct AddFoodSheet: View {
     }
 
     /// Why the Create screen opened from a match that wasn't the right product.
-    private func notItNote(for product: Product) -> String {
-        guard let barcode = product.barcode else {
+    private func notItNote(barcode: String?) -> String {
+        guard let barcode else {
             return "Add the product you have from its label."
         }
         return "Add the product you have from its label. It keeps barcode \(barcode), so scanning it finds this one from now on."
