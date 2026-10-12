@@ -68,8 +68,10 @@ final class EntryLogger {
     /// deleted on another device. If the entry is already being saved or deleted, waits for that instead.
     func sync(_ entry: FoodEntry, in context: ModelContext) async {
         guard !entry.isDeleted, entry.modelContext != nil else { return }
-        if entry.deletedAt != nil, !writesHere(entry), !leavesToOtherDevice(entry) {
-            // Deleted, but its writer has left it alone for a day and may be gone, so this device removes it.
+        if entry.deletedAt != nil, !writesHere(entry), !leavesToOtherDevice(entry), health.access == .allowed {
+            // Deleted, but its writer has left it alone for a day and may be gone, so this device
+            // removes it. Only once it may: claiming it without access would take it from the writer
+            // while this device can't remove it either.
             entry.healthWriterID = deviceID
         }
         guard writesHere(entry) else { return }
