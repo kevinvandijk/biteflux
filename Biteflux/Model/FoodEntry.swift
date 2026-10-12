@@ -38,6 +38,9 @@ final class FoodEntry {
     /// last changed it. With iCloud sync, other devices leave the entry to that one, because Apple
     /// Health syncs between devices itself and a second write would count the food twice.
     var healthWriterID: String?
+    /// When the writer last tried to save this to Apple Health. Another device only takes the entry
+    /// over once the writer has left it alone for a day; see `HealthWriter`.
+    var healthTriedAt: Date?
     /// The library product this was logged from. The entry keeps its own copy of the
     /// nutrients, so changing or removing the product never changes what you ate.
     var productID: UUID?

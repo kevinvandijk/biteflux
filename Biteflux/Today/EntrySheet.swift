@@ -9,18 +9,29 @@ struct EntrySheet: View {
     var product: Product?
     var onSave: (EntryChange) -> Void
     var onDelete: () -> Void
+    /// Saves the entry from this device, when the device that was meant to save it is gone.
+    var onTakeOver: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(EntryLogger.self) private var logger
     @State private var change: EntryChange
     @State private var typingAmount = false
     @State private var amountText = ""
     @State private var confirmingDelete = false
+    @State private var confirmingTakeOver = false
 
-    init(entry: FoodEntry, product: Product?, onSave: @escaping (EntryChange) -> Void, onDelete: @escaping () -> Void) {
+    init(
+        entry: FoodEntry,
+        product: Product?,
+        onSave: @escaping (EntryChange) -> Void,
+        onDelete: @escaping () -> Void,
+        onTakeOver: @escaping () -> Void
+    ) {
         self.entry = entry
         self.product = product
         self.onSave = onSave
         self.onDelete = onDelete
+        self.onTakeOver = onTakeOver
         _change = State(initialValue: entry.currentValues)
     }
 
@@ -76,6 +87,19 @@ struct EntrySheet: View {
                         .font(Ember.sans(13, relativeTo: .footnote))
                         .foregroundStyle(entry.syncState == .failed ? Ember.failed : Ember.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
+                    if logger.canTakeOver(entry) {
+                        Button {
+                            confirmingTakeOver = true
+                        } label: {
+                            Text("Save it from this iPhone")
+                                .font(Ember.sans(14, weight: .bold, relativeTo: .subheadline))
+                                .padding(.horizontal, 20)
+                                .frame(minHeight: 44)
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .background(Ember.track, in: Capsule())
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -126,9 +150,25 @@ struct EntrySheet: View {
         } message: {
             Text("It's removed from Apple Health too.")
         }
+        .confirmationDialog("Save it from this iPhone?", isPresented: $confirmingTakeOver, titleVisibility: .visible) {
+            Button("Save it from this iPhone") {
+                onTakeOver()
+                dismiss()
+            }
+        } message: {
+            Text("Do this only if the other device is gone, like an old phone. If it's still in use and saves this food too, Apple Health counts it twice.")
+        }
     }
 
     private var healthNote: String {
+        if logger.leavesToOtherDevice(entry) {
+            return entry.syncState == .inHealth
+                ? "In Apple Health. Another of your devices saved it there, so a change goes there the next time Biteflux is open on that device."
+                : "Another of your devices saves this to Apple Health, the next time Biteflux is open on it. If that device is gone, this iPhone can take over a day after it last tried."
+        }
+        if logger.canTakeOver(entry) {
+            return "Another of your devices was saving this to Apple Health, but hasn't tried for over a day."
+        }
         switch entry.syncState {
         case .inHealth:
             return "In Apple Health. A change replaces it there too."
