@@ -77,8 +77,8 @@ Label photos are read by OpenAI's GPT Luna 6 (`openai/gpt-6-luna`) through
 Biteflux asks for the key (get one at [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys))
 and keeps it in the iPhone's Keychain; it is never part of this repository. Each photo costs a
 fraction of a cent on your OpenRouter account. The model copies the numbers as printed, Biteflux
-works them out per 100 g, and values the model could only partly read are highlighted in the
-product form for you to check.
+works them out per 100 g, and the Create screen asks you about any value the model could only
+partly read.
 
 ## iCloud sync
 
