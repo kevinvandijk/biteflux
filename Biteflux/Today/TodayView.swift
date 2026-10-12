@@ -87,7 +87,8 @@ struct TodayView: View {
                 entry: entry,
                 product: products.first { $0.productID == entry.productID },
                 onSave: { save($0, to: entry) },
-                onDelete: { delete(entry) }
+                onDelete: { delete(entry) },
+                onTakeOver: { takeOver(entry) }
             )
         }
         .sheet(isPresented: $settingGoal) {
@@ -157,7 +158,8 @@ struct TodayView: View {
 
     @ViewBuilder
     private var healthBanner: some View {
-        let failed = today.filter { $0.syncState == .failed }
+        // Food another device saves is that device's to retry; its own screen says so.
+        let failed = today.filter { $0.syncState == .failed && logger.writesHere($0) }
         if logger.access == .unavailable {
             HealthBanner(
                 title: "Apple Health isn't available here.",
@@ -237,9 +239,13 @@ struct TodayView: View {
         Task { await logger.update(entry, in: context) { $0.apply(change, product: product) } }
     }
 
-    /// Also takes over food another device was meant to save, in case that device is gone.
     private func retry() {
-        Task { await logger.syncUnconfirmed(in: context, takingOver: true) }
+        Task { await logger.syncUnconfirmed(in: context) }
+    }
+
+    /// Saves food here that another device was meant to save, once you've said that device is gone.
+    private func takeOver(_ entry: FoodEntry) {
+        Task { await logger.takeOver(entry, in: context) }
     }
 
     private func allowHealth() {

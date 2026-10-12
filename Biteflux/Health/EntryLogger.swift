@@ -32,8 +32,21 @@ final class EntryLogger {
 
     /// Whether this device writes the entry to Apple Health. An entry another device logged is
     /// that device's to write; Apple Health brings it here on its own.
-    private func writesHere(_ entry: FoodEntry) -> Bool {
+    func writesHere(_ entry: FoodEntry) -> Bool {
         entry.healthWriterID == nil || entry.healthWriterID == deviceID
+    }
+
+    /// Whether another device writes the entry and may still be working on it, so this one leaves
+    /// it alone. A change made here then reaches Apple Health through that device.
+    func leavesToOtherDevice(_ entry: FoodEntry) -> Bool {
+        !writesHere(entry) && !HealthWriter.isQuiet(lastTried: entry.healthTriedAt, now: .now)
+    }
+
+    /// Whether this device may save an entry another device was meant to save: Apple Health
+    /// hasn't confirmed it, and that device has left it alone for a day, so it may be gone.
+    func canTakeOver(_ entry: FoodEntry) -> Bool {
+        !writesHere(entry) && entry.syncState != .inHealth
+            && HealthWriter.isQuiet(lastTried: entry.healthTriedAt, now: .now)
     }
 
     func refreshAccess() {
@@ -66,6 +79,8 @@ final class EntryLogger {
         if entry.healthWriterID == nil {
             entry.healthWriterID = deviceID
         }
+        // Tells other devices this one is still at work on the entry.
+        entry.healthTriedAt = .now
         // Apple Health only gets food Biteflux has stored, so nothing there is left without its entry.
         do {
             try context.save()
@@ -115,25 +130,33 @@ final class EntryLogger {
         }
     }
 
-    /// Retries every entry Apple Health hasn't confirmed, for example when the app comes back to the front.
-    ///
-    /// With `takingOver`, entries another device was meant to write become this device's, for when
-    /// that device is gone, like an old phone. Only a tap on "Try again" asks for that, because
-    /// if the other device is still around, both could write the same food.
-    func syncUnconfirmed(in context: ModelContext, takingOver: Bool = false) async {
+    /// Retries every entry Apple Health hasn't confirmed, for example when the app comes back to the
+    /// front. Entries another device writes stay with that device.
+    func syncUnconfirmed(in context: ModelContext) async {
         refreshAccess()
         let confirmed = SyncState.inHealth.rawValue
         let descriptor = FetchDescriptor<FoodEntry>(predicate: #Predicate<FoodEntry> { $0.syncStateRawValue != confirmed })
         guard let entries = try? context.fetch(descriptor) else { return }
         for entry in entries {
-            if takingOver, !entry.isDeleted, !writesHere(entry) {
-                entry.healthWriterID = deviceID
-                // The other device's Apple Health ID may never reach this one, so look the entry up
-                // by its Biteflux ID instead, and save it only if Apple Health doesn't have it.
-                entry.healthFoodID = nil
-            }
             await sync(entry, in: context)
         }
+    }
+
+    /// Saves an entry another device was meant to save, for when that device is gone, like an old
+    /// phone. Only the entry screen asks, for the one entry you picked, and only once that device
+    /// has left it alone for a day.
+    func takeOver(_ entry: FoodEntry, in context: ModelContext) async {
+        while let other = running[entry.entryID] {
+            await other.value
+        }
+        guard !entry.isDeleted, entry.modelContext != nil, canTakeOver(entry) else { return }
+        entry.healthWriterID = deviceID
+        // The other device's Apple Health ID may never reach this one, so look the entry up by its
+        // Biteflux ID instead, and save it only if Apple Health doesn't have it.
+        entry.healthFoodID = nil
+        entry.syncState = .waiting
+        entry.syncProblem = nil
+        await start(entry.entryID) { await self.write(entry, in: context) }.value
     }
 
     /// Keeps a change to an entry in Biteflux, then replaces the entry in Apple Health with the
@@ -144,11 +167,18 @@ final class EntryLogger {
         }
         guard !entry.isDeleted, entry.modelContext != nil else { return }
         change(entry)
-        // Whoever changes an entry replaces it in Apple Health, so this device takes it over.
-        entry.healthWriterID = deviceID
+        // Whoever changes an entry replaces it in Apple Health, unless another device writes it and
+        // may still be working on it. That device then replaces it the next time Biteflux runs there.
+        if !leavesToOtherDevice(entry) {
+            entry.healthWriterID = deviceID
+        }
         entry.healthOutdated = true
         entry.syncState = .waiting
         entry.syncProblem = nil
+        guard writesHere(entry) else {
+            try? context.save()
+            return
+        }
         await start(entry.entryID) { await self.write(entry, in: context) }.value
     }
 
