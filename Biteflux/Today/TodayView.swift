@@ -293,7 +293,8 @@ struct TodayView: View {
     /// brings in such a deletion, never while a sheet is opening or closing.
     private func askForHealthIfNeeded() {
         logger.refreshAccess()
-        guard logger.access == .notAsked, addFood == nil, editing == nil, !scanning, !settingGoal,
+        // Settings has sheets of its own that Today can't see, and its own button to allow access.
+        guard logger.access == .notAsked, addFood == nil, editing == nil, !scanning, !settingGoal, !showingSettings,
               entries.contains(where: { $0.syncState != .inHealth }) || hasDeletionToClear else { return }
         allowHealth()
     }
