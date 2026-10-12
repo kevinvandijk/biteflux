@@ -7,7 +7,7 @@ import Security
 enum InstallID {
     private static let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: "com.kevinvandijk.biteflux.install",
+        kSecAttrService as String: "one.sqre.biteflux.install",
         kSecAttrAccount as String: "install-id",
     ]
     /// Where an earlier build kept the ID, and the fallback if the Keychain can't be written.

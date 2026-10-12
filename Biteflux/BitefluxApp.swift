@@ -8,7 +8,7 @@ struct BitefluxApp: App {
     private let container: ModelContainer
 
     /// The CloudKit container for iCloud sync of your log and library, like
-    /// "iCloud.com.kevinvandijk.biteflux". Nil keeps everything on this phone. Turning it on needs
+    /// "iCloud.one.sqre.biteflux". Nil keeps everything on this phone. Turning it on needs
     /// the iCloud capability, which needs a paid Apple developer account; see the README.
     static let iCloudContainer: String? = nil
 
