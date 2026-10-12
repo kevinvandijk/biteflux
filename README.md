@@ -5,8 +5,9 @@ keeps your food log, and saves every entry with its nutrients to Apple Health.
 The look follows the B4 "Ember" design: dark and warm, serif numbers, plain-language sync status.
 
 Built so far: the app skeleton, the Today screen and the Apple Health round trip (step 1), the
-product library (step 2), scanning (step 3), the Match and Create screens (step 4), and editing
-what you logged plus your daily goal (step 5).
+product library (step 2), scanning (step 3), the Match and Create screens (step 4), editing
+what you logged plus your daily goal (step 5), and the Settings screen with TestFlight preparation
+(step 6).
 "Scan something" opens the camera, which reads a barcode, a product name you tap on the pack, or a
 photo of the nutrition label. A barcode is looked up on Open Food Facts, a name is searched in your
 products, the Dutch food table (NEVO) and Open Food Facts, and a label photo fills in a new product
@@ -14,7 +15,8 @@ for you to check. You can also type or search instead. A product you found opens
 screen, where you turn the gram dial, pick the meal and log it; a new one opens on the Create
 screen, which asks about any value that was hard to read and saves and logs it in one go. On Today,
 tap a food to change the amount, meal or time, or delete it; Apple Health gets the same change. Tap
-the headline to set your daily goal.
+the headline to set your daily goal. Settings, behind the button at the top right, shows Apple Health
+access, the daily goal, the OpenRouter key for reading labels, and where the food data comes from.
 
 ## Layout
 
@@ -31,7 +33,8 @@ the headline to set your daily goal.
     product never changes your log.
   - `Scan/` is the Scan screen (Apple's live text and barcode scanner) and label reading with
     GPT Luna 6 through OpenRouter.
-  - `Today/` is the Today screen, `Theme/` the Ember colours and fonts.
+  - `Today/` is the Today screen with the entry and goal sheets, `Settings/` the Settings screen,
+    `Theme/` the Ember colours and fonts.
 - `BitefluxCore/` is a Swift package with the logic that doesn't need a phone: nutrient maths,
   kJ to kcal, salt to sodium, the meal for a time of day, the day's totals, the gram dial,
   reading Open Food Facts answers and the NEVO table, the label reading request and answer,
@@ -79,6 +82,23 @@ and keeps it in the iPhone's Keychain; it is never part of this repository. Each
 fraction of a cent on your OpenRouter account. The model copies the numbers as printed, Biteflux
 works them out per 100 g, and the Create screen asks you about any value the model could only
 partly read.
+
+## TestFlight
+
+The project is ready to archive: it has an app icon, a privacy manifest, the export compliance key
+(Biteflux only uses standard HTTPS) and the Health & Fitness category. Uploading needs a paid Apple
+developer account:
+
+1. In Xcode, under Signing & Capabilities, pick the paid team. Xcode registers the bundle ID
+   `com.kevinvandijk.biteflux` with HealthKit.
+2. In [App Store Connect](https://appstoreconnect.apple.com), add a new app with that bundle ID.
+3. With `NEVO2025_v9.0.csv` in `Biteflux/NEVO/` if you want NEVO in the build, choose Product,
+   Archive, then Distribute App, TestFlight Internal Only.
+4. Once the build is processed, add yourself as an internal tester and install it with the
+   TestFlight app.
+
+Raise the build number (`CURRENT_PROJECT_VERSION`) for every upload. RIVM's conditions allow NEVO in
+an app that's free to its users; check them again before inviting testers outside your own account.
 
 ## iCloud sync
 

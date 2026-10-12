@@ -15,6 +15,7 @@ struct TodayView: View {
     @State private var addFood: AddFoodRequest?
     @State private var editing: FoodEntry?
     @State private var settingGoal = false
+    @State private var showingSettings = false
 
     private var today: [FoodEntry] {
         entries.filter { Calendar.current.isDateInToday($0.eatenAt) }
@@ -25,6 +26,16 @@ struct TodayView: View {
     }
 
     var body: some View {
+        NavigationStack {
+            dayScreen
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(isPresented: $showingSettings) {
+                    SettingsView()
+                }
+        }
+    }
+
+    private var dayScreen: some View {
         ZStack(alignment: .bottom) {
             Ember.background.ignoresSafeArea()
 
@@ -77,10 +88,24 @@ struct TodayView: View {
     }
 
     private var header: some View {
-        Text(Date.now, format: .dateTime.weekday(.wide).day().month(.wide))
-            .font(Ember.sans(14, relativeTo: .subheadline))
-            .foregroundStyle(Ember.secondaryText)
-            .frame(minHeight: 44, alignment: .leading)
+        HStack {
+            Text(Date.now, format: .dateTime.weekday(.wide).day().month(.wide))
+                .font(Ember.sans(14, relativeTo: .subheadline))
+                .foregroundStyle(Ember.secondaryText)
+            Spacer(minLength: 12)
+            Button {
+                showingSettings = true
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .background(Ember.surface, in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
+        }
+        .frame(minHeight: 44)
     }
 
     /// Tap it to change the daily goal.
