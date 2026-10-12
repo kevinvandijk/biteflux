@@ -92,6 +92,9 @@ developer account:
 1. In Xcode, under Signing & Capabilities, pick the paid team. Xcode registers the bundle ID
    `com.kevinvandijk.biteflux` with HealthKit.
 2. In [App Store Connect](https://appstoreconnect.apple.com), add a new app with that bundle ID.
+   Under App Privacy, answer as the privacy manifest does: Photos are collected for app
+   functionality, linked to the user (each upload carries their OpenRouter key) and not used for
+   tracking.
 3. With `NEVO2025_v9.0.csv` in `Biteflux/NEVO/` if you want NEVO in the build, choose Product,
    Archive, then Distribute App, TestFlight Internal Only.
 4. Once the build is processed, add yourself as an internal tester and install it with the

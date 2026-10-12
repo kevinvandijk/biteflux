@@ -9,11 +9,12 @@
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
 		<dict>
-			<!-- Label photos go to OpenRouter, on the user's own key, to be read. -->
+			<!-- Label photos go to OpenRouter to be read. Each upload carries the user's own key,
+			     so OpenRouter can tie the photo to their account: the photos count as linked. -->
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypePhotosorVideos</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<false/>
+			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>
