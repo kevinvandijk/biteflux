@@ -13,6 +13,8 @@ import SwiftData
 final class EntryLogger {
     private let health: HealthStore
     private(set) var access: HealthStore.Access
+    /// This install, as the writer of the entries it logs or changes.
+    private let deviceID: String
 
     /// The save or delete running for each entry. Every `await` lets other work in, so
     /// without this two syncs of one entry could both find nothing in Apple Health and
@@ -21,10 +23,26 @@ final class EntryLogger {
 
     /// Pass `nil` for the real Apple Health store. A default argument can't create it,
     /// because default arguments aren't evaluated on the main actor.
-    init(health: HealthStore? = nil) {
+    init(health: HealthStore? = nil, deviceID: String? = nil) {
         let health = health ?? HealthStore()
         self.health = health
         self.access = health.access
+        self.deviceID = deviceID ?? Self.installID()
+    }
+
+    /// A random ID for this install, kept in UserDefaults, which iCloud sync doesn't share.
+    private static func installID() -> String {
+        let key = "installID"
+        if let id = UserDefaults.standard.string(forKey: key) { return id }
+        let id = UUID().uuidString
+        UserDefaults.standard.set(id, forKey: key)
+        return id
+    }
+
+    /// Whether this device writes the entry to Apple Health. An entry another device logged is
+    /// that device's to write; Apple Health brings it here on its own.
+    private func writesHere(_ entry: FoodEntry) -> Bool {
+        entry.healthWriterID == nil || entry.healthWriterID == deviceID
     }
 
     func refreshAccess() {
@@ -45,7 +63,7 @@ final class EntryLogger {
     /// Writes one entry to Apple Health and confirms it is there.
     /// If the entry is already being saved or deleted, waits for that instead.
     func sync(_ entry: FoodEntry, in context: ModelContext) async {
-        guard !entry.isDeleted, entry.modelContext != nil else { return }
+        guard !entry.isDeleted, entry.modelContext != nil, writesHere(entry) else { return }
         if let other = running[entry.entryID] {
             await other.value
             return
@@ -54,6 +72,9 @@ final class EntryLogger {
     }
 
     private func write(_ entry: FoodEntry, in context: ModelContext) async {
+        if entry.healthWriterID == nil {
+            entry.healthWriterID = deviceID
+        }
         // Apple Health only gets food Biteflux has stored, so nothing there is left without its entry.
         do {
             try context.save()
@@ -118,6 +139,8 @@ final class EntryLogger {
         }
         guard !entry.isDeleted, entry.modelContext != nil else { return }
         change(entry)
+        // Whoever changes an entry replaces it in Apple Health, so this device takes it over.
+        entry.healthWriterID = deviceID
         entry.healthOutdated = true
         entry.syncState = .waiting
         entry.syncProblem = nil
