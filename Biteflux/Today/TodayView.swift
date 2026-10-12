@@ -15,6 +15,7 @@ struct TodayView: View {
     @State private var addFood: AddFoodRequest?
     @State private var editing: FoodEntry?
     @State private var settingGoal = false
+    @State private var launched = false
 
     private var today: [FoodEntry] {
         entries.filter { Calendar.current.isDateInToday($0.eatenAt) }
@@ -54,16 +55,23 @@ struct TodayView: View {
                 .padding(.bottom, 12)
         }
         .foregroundStyle(Ember.text)
+        .task {
+            // Only at launch: when Today reappears later, a sheet may be on its way in.
+            if !launched {
+                launched = true
+                askForHealthIfNeeded()
+            }
+        }
         .fullScreenCover(isPresented: $scanning, onDismiss: { addFood = afterScan; afterScan = nil }) {
             ScanView(remainingKcal: summary.remainingKcal) { start in
                 afterScan = AddFoodRequest(start: start)
                 scanning = false
             }
         }
-        .sheet(item: $addFood) { request in
+        .sheet(item: $addFood, onDismiss: askForHealthIfNeeded) { request in
             AddFoodSheet(start: request.start, onLog: log)
         }
-        .sheet(item: $editing) { entry in
+        .sheet(item: $editing, onDismiss: askForHealthIfNeeded) { entry in
             EntrySheet(
                 entry: entry,
                 product: products.first { $0.productID == entry.productID },
@@ -214,6 +222,16 @@ struct TodayView: View {
             await logger.requestAccess()
             await logger.syncUnconfirmed(in: context)
         }
+    }
+
+    /// Asks for Apple Health access the first time food is waiting to go there. Apple's permission
+    /// sheet only shows once nothing else is on screen, so this runs at launch and after a sheet has
+    /// closed, never while one is opening or closing.
+    private func askForHealthIfNeeded() {
+        logger.refreshAccess()
+        guard logger.access == .notAsked, addFood == nil, editing == nil, !scanning,
+              entries.contains(where: { $0.syncState != .inHealth }) else { return }
+        allowHealth()
     }
 }
 

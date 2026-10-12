@@ -76,11 +76,15 @@ final class EntryLogger {
         }
 
         defer { try? context.save() }
+        refreshAccess()
+        guard health.access != .notAsked else {
+            // Apple's permission sheet can't show while another sheet is opening or closing, and a
+            // request made then never finishes. Today asks once nothing else is on screen; until
+            // then the entry waits here.
+            entry.syncState = .waiting
+            return
+        }
         do {
-            if health.access == .notAsked {
-                try await health.requestAccess()
-            }
-            refreshAccess()
 
             if entry.healthOutdated {
                 // Apple Health can't edit a saved food, so the old one goes and the new values are saved fresh.
