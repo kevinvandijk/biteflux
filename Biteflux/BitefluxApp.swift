@@ -7,10 +7,19 @@ struct BitefluxApp: App {
     @State private var logger = EntryLogger()
     private let container: ModelContainer
 
+    /// The CloudKit container for iCloud sync of your log and library, like
+    /// "iCloud.com.kevinvandijk.biteflux". Nil keeps everything on this phone. Turning it on needs
+    /// the iCloud capability, which needs a paid Apple developer account; see the README.
+    static let iCloudContainer: String? = nil
+
     init() {
         FontRegistration.registerBundledFonts()
         do {
-            container = try ModelContainer(for: FoodEntry.self, Product.self)
+            var configuration = ModelConfiguration(cloudKitDatabase: .none)
+            if let iCloud = Self.iCloudContainer {
+                configuration = ModelConfiguration(cloudKitDatabase: .private(iCloud))
+            }
+            container = try ModelContainer(for: FoodEntry.self, Product.self, configurations: configuration)
         } catch {
             fatalError("Couldn't open the food log: \(error)")
         }

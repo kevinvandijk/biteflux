@@ -6,15 +6,28 @@ import SwiftUI
 struct TodayView: View {
     @Environment(\.modelContext) private var context
     @Environment(EntryLogger.self) private var logger
-    @Query(sort: \FoodEntry.eatenAt) private var entries: [FoodEntry]
-    @AppStorage("dailyGoalKcal") private var goalKcal = 2300.0
+    /// Food deleted here that another device still has to remove from Apple Health stays hidden.
+    @Query(filter: #Predicate<FoodEntry> { $0.deletedAt == nil }, sort: \FoodEntry.eatenAt)
+    private var entries: [FoodEntry]
+    /// Those hidden deletions, which may still have to leave Apple Health.
+    @Query(filter: #Predicate<FoodEntry> { $0.deletedAt != nil }) private var deletions: [FoodEntry]
+    @Query private var products: [Product]
+    @AppStorage("dailyGoalKcal") private var goalKcal = DailyGoal.standardKcal
     @State private var scanning = false
     /// What the Scan screen found, opened in the library once the camera has closed.
     @State private var afterScan: AddFoodRequest?
     @State private var addFood: AddFoodRequest?
+    @State private var editing: FoodEntry?
+    @State private var settingGoal = false
+    @State private var launched = false
 
     private var today: [FoodEntry] {
         entries.filter { Calendar.current.isDateInToday($0.eatenAt) }
+    }
+
+    /// A deletion this device may remove from Apple Health: its own, or one whose writer went quiet.
+    private var hasDeletionToClear: Bool {
+        deletions.contains { !logger.leavesToOtherDevice($0) }
     }
 
     private var summary: DaySummary {
@@ -36,7 +49,7 @@ struct TodayView: View {
                         ForEach(Meal.allCases) { meal in
                             let mealEntries = today.filter { $0.meal == meal }
                             if !mealEntries.isEmpty {
-                                MealCard(meal: meal, entries: mealEntries, onDelete: delete)
+                                MealCard(meal: meal, entries: mealEntries, onEdit: { editing = $0 }, onDelete: delete)
                             }
                         }
                         nevoCredit
@@ -51,14 +64,46 @@ struct TodayView: View {
                 .padding(.bottom, 12)
         }
         .foregroundStyle(Ember.text)
-        .fullScreenCover(isPresented: $scanning, onDismiss: { addFood = afterScan; afterScan = nil }) {
+        .task {
+            // Only at launch: when Today reappears later, a sheet may be on its way in.
+            if !launched {
+                launched = true
+                askForHealthIfNeeded()
+            }
+        }
+        .onChange(of: hasDeletionToClear) { _, has in
+            // iCloud can bring in a deletion after Today has appeared, with no launch or closing
+            // sheet to act on it. Only deletions are watched: a food you log changes `entries` while
+            // the Add food sheet is still closing, when Apple's permission sheet can't show. A
+            // deletion made here never starts this, as it always waits for another device.
+            guard has else { return }
+            logger.refreshAccess()
+            if logger.access == .allowed {
+                retry()
+            } else {
+                askForHealthIfNeeded()
+            }
+        }
+        .fullScreenCover(isPresented: $scanning, onDismiss: afterScanning) {
             ScanView(remainingKcal: summary.remainingKcal) { start in
                 afterScan = AddFoodRequest(start: start)
                 scanning = false
             }
         }
-        .sheet(item: $addFood) { request in
+        .sheet(item: $addFood, onDismiss: askForHealthIfNeeded) { request in
             AddFoodSheet(start: request.start, onLog: log)
+        }
+        .sheet(item: $editing, onDismiss: askForHealthIfNeeded) { entry in
+            EntrySheet(
+                entry: entry,
+                product: products.first { $0.productID == entry.productID },
+                onSave: { save($0, to: entry) },
+                onDelete: { delete(entry) },
+                onTakeOver: { takeOver(entry) }
+            )
+        }
+        .sheet(isPresented: $settingGoal, onDismiss: askForHealthIfNeeded) {
+            GoalSheet()
         }
     }
 
@@ -69,16 +114,26 @@ struct TodayView: View {
             .frame(minHeight: 44, alignment: .leading)
     }
 
+    /// Tap it to change the daily goal.
     private var headline: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            headlineText
-                .font(Ember.serif(34))
-                .accessibilityAddTraits(.isHeader)
-            Text(verbatim: summaryLine)
-                .font(Ember.sans(13, relativeTo: .footnote))
-                .foregroundStyle(Ember.secondaryText)
-            ProgressBar(progress: summary.progress)
+        Button {
+            settingGoal = true
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                headlineText
+                    .font(Ember.serif(34))
+                    .multilineTextAlignment(.leading)
+                    .accessibilityAddTraits(.isHeader)
+                Text(verbatim: summaryLine)
+                    .font(Ember.sans(13, relativeTo: .footnote))
+                    .foregroundStyle(Ember.secondaryText)
+                    .multilineTextAlignment(.leading)
+                ProgressBar(progress: summary.progress)
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityHint("Change your daily goal")
     }
 
     private var headlineText: Text {
@@ -100,7 +155,8 @@ struct TodayView: View {
 
     @ViewBuilder
     private var healthBanner: some View {
-        let failed = today.filter { $0.syncState == .failed }
+        // Food another device saves is that device's to retry; its own screen says so.
+        let failed = today.filter { $0.syncState == .failed && logger.writesHere($0) }
         if logger.access == .unavailable {
             HealthBanner(
                 title: "Apple Health isn't available here.",
@@ -174,8 +230,29 @@ struct TodayView: View {
         Task { await logger.delete(entry, in: context) }
     }
 
+    /// Keeps the change, then replaces the entry in Apple Health.
+    private func save(_ change: EntryChange, to entry: FoodEntry) {
+        let product = products.first { $0.productID == entry.productID }
+        Task { await logger.update(entry, in: context) { $0.apply(change, product: product) } }
+    }
+
+    /// Opens what the Scan screen found, or, when it found nothing, asks for Apple Health access if
+    /// something came up while the camera was open.
+    private func afterScanning() {
+        addFood = afterScan
+        afterScan = nil
+        if addFood == nil {
+            askForHealthIfNeeded()
+        }
+    }
+
     private func retry() {
         Task { await logger.syncUnconfirmed(in: context) }
+    }
+
+    /// Saves food here that another device was meant to save, once you've said that device is gone.
+    private func takeOver(_ entry: FoodEntry) {
+        Task { await logger.takeOver(entry, in: context) }
     }
 
     private func allowHealth() {
@@ -183,6 +260,17 @@ struct TodayView: View {
             await logger.requestAccess()
             await logger.syncUnconfirmed(in: context)
         }
+    }
+
+    /// Asks for Apple Health access the first time food is waiting to go there, or a deleted food
+    /// this device has to remove is waiting to leave it. Apple's permission sheet only shows once
+    /// nothing else is on screen, so this runs at launch, after a sheet has closed and when iCloud
+    /// brings in such a deletion, never while a sheet is opening or closing.
+    private func askForHealthIfNeeded() {
+        logger.refreshAccess()
+        guard logger.access == .notAsked, addFood == nil, editing == nil, !scanning, !settingGoal,
+              entries.contains(where: { $0.syncState != .inHealth }) || hasDeletionToClear else { return }
+        allowHealth()
     }
 }
 

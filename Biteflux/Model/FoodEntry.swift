@@ -31,6 +31,19 @@ final class FoodEntry {
     var syncProblem: String?
     /// The Apple Health food entry this was saved as, once a save succeeded.
     var healthFoodID: UUID?
+    /// The entry changed after it may have reached Apple Health. Until the old Health entry is
+    /// removed, this stays set, so a sync after a crash still replaces it rather than adding one.
+    var healthOutdated: Bool = false
+    /// The install of Biteflux that writes this entry to Apple Health: the one that logged it or
+    /// last changed it. With iCloud sync, other devices leave the entry to that one, because Apple
+    /// Health syncs between devices itself and a second write would count the food twice.
+    var healthWriterID: String?
+    /// When the writer last tried to save this to Apple Health. Another device only takes the entry
+    /// over once the writer has left it alone for a day; see `HealthWriter`.
+    var healthTriedAt: Date?
+    /// When you deleted it on a device that doesn't write it. The entry stays, hidden, until its
+    /// writer has removed it from Apple Health: only the writer can be sure its own save is gone.
+    var deletedAt: Date?
     /// The library product this was logged from. The entry keeps its own copy of the
     /// nutrients, so changing or removing the product never changes what you ate.
     var productID: UUID?
@@ -104,5 +117,30 @@ final class FoodEntry {
             saturatedFatG = newValue.saturatedFatG
             sodiumMg = newValue.sodiumMg
         }
+    }
+}
+
+/// A change to a logged entry, made on the entry screen.
+struct EntryChange: Equatable {
+    var grams: Double
+    var meal: Meal
+    var eatenAt: Date
+}
+
+extension FoodEntry {
+    var currentValues: EntryChange {
+        EntryChange(grams: grams, meal: meal, eatenAt: eatenAt)
+    }
+
+    /// Takes over a change. A new amount scales the entry's own nutrients, so it never picks up
+    /// later edits to the product; `product` only names the portion, like "1 koek (25 g)".
+    func apply(_ change: EntryChange, product: Product?) {
+        if abs(change.grams - grams) >= 0.05, let rescaled = nutrients.rescaled(fromPortionOf: grams, to: change.grams) {
+            nutrients = rescaled
+            portion = product?.portion(grams: change.grams) ?? "\(change.grams.amount) g"
+            grams = change.grams
+        }
+        meal = change.meal
+        eatenAt = change.eatenAt
     }
 }
