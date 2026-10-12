@@ -1,4 +1,5 @@
 import BitefluxCore
+import SwiftData
 import SwiftUI
 
 /// The B4 Settings screen: Apple Health access, the daily goal, the OpenRouter key for reading
