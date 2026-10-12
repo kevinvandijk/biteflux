@@ -41,6 +41,9 @@ final class FoodEntry {
     /// When the writer last tried to save this to Apple Health. Another device only takes the entry
     /// over once the writer has left it alone for a day; see `HealthWriter`.
     var healthTriedAt: Date?
+    /// When you deleted it on a device that doesn't write it. The entry stays, hidden, until its
+    /// writer has removed it from Apple Health: only the writer can be sure its own save is gone.
+    var deletedAt: Date?
     /// The library product this was logged from. The entry keeps its own copy of the
     /// nutrients, so changing or removing the product never changes what you ate.
     var productID: UUID?

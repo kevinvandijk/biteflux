@@ -64,15 +64,24 @@ final class EntryLogger {
         await sync(entry, in: context)
     }
 
-    /// Writes one entry to Apple Health and confirms it is there.
-    /// If the entry is already being saved or deleted, waits for that instead.
+    /// Writes one entry to Apple Health and confirms it is there, or removes it there when it was
+    /// deleted on another device. If the entry is already being saved or deleted, waits for that instead.
     func sync(_ entry: FoodEntry, in context: ModelContext) async {
-        guard !entry.isDeleted, entry.modelContext != nil, writesHere(entry) else { return }
+        guard !entry.isDeleted, entry.modelContext != nil else { return }
+        if entry.deletedAt != nil, !writesHere(entry), !leavesToOtherDevice(entry) {
+            // Deleted, but its writer has left it alone for a day and may be gone, so this device removes it.
+            entry.healthWriterID = deviceID
+        }
+        guard writesHere(entry) else { return }
         if let other = running[entry.entryID] {
             await other.value
             return
         }
-        await start(entry.entryID) { await self.write(entry, in: context) }.value
+        if entry.deletedAt != nil {
+            await start(entry.entryID) { await self.remove(entry, in: context) }.value
+        } else {
+            await start(entry.entryID) { await self.write(entry, in: context) }.value
+        }
     }
 
     private func write(_ entry: FoodEntry, in context: ModelContext) async {
@@ -130,12 +139,15 @@ final class EntryLogger {
         }
     }
 
-    /// Retries every entry Apple Health hasn't confirmed, for example when the app comes back to the
-    /// front. Entries another device writes stay with that device.
+    /// Retries every entry Apple Health hasn't confirmed, and removes entries deleted on another
+    /// device, for example when the app comes back to the front. Entries another device writes stay
+    /// with that device.
     func syncUnconfirmed(in context: ModelContext) async {
         refreshAccess()
         let confirmed = SyncState.inHealth.rawValue
-        let descriptor = FetchDescriptor<FoodEntry>(predicate: #Predicate<FoodEntry> { $0.syncStateRawValue != confirmed })
+        let descriptor = FetchDescriptor<FoodEntry>(predicate: #Predicate<FoodEntry> {
+            $0.syncStateRawValue != confirmed || $0.deletedAt != nil
+        })
         guard let entries = try? context.fetch(descriptor) else { return }
         for entry in entries {
             await sync(entry, in: context)
@@ -149,7 +161,7 @@ final class EntryLogger {
         while let other = running[entry.entryID] {
             await other.value
         }
-        guard !entry.isDeleted, entry.modelContext != nil, canTakeOver(entry) else { return }
+        guard !entry.isDeleted, entry.modelContext != nil, entry.deletedAt == nil, canTakeOver(entry) else { return }
         entry.healthWriterID = deviceID
         // The other device's Apple Health ID may never reach this one, so look the entry up by its
         // Biteflux ID instead, and save it only if Apple Health doesn't have it.
@@ -165,7 +177,7 @@ final class EntryLogger {
         while let other = running[entry.entryID] {
             await other.value
         }
-        guard !entry.isDeleted, entry.modelContext != nil else { return }
+        guard !entry.isDeleted, entry.modelContext != nil, entry.deletedAt == nil else { return }
         change(entry)
         // Whoever changes an entry replaces it in Apple Health, unless another device writes it and
         // may still be working on it. That device then replaces it the next time Biteflux runs there.
@@ -189,6 +201,14 @@ final class EntryLogger {
             await other.value
         }
         guard !entry.isDeleted, entry.modelContext != nil else { return }
+        if leavesToOtherDevice(entry) {
+            // The writer's save may not have reached this device's Apple Health yet, or may still
+            // be under way, so removing it here could miss it. The writer removes it instead, the
+            // next time Biteflux runs there; until then the entry stays as a hidden marker.
+            entry.deletedAt = .now
+            try? context.save()
+            return
+        }
         await start(entry.entryID) { await self.remove(entry, in: context) }.value
     }
 
