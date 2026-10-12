@@ -5,13 +5,16 @@ keeps your food log, and saves every entry with its nutrients to Apple Health.
 The look follows the B4 "Ember" design: dark and warm, serif numbers, plain-language sync status.
 
 Built so far: the app skeleton, the Today screen and the Apple Health round trip (step 1), the
-product library (step 2), scanning (step 3), and the Match and Create screens (step 4).
+product library (step 2), scanning (step 3), the Match and Create screens (step 4), and editing
+what you logged plus your daily goal (step 5).
 "Scan something" opens the camera, which reads a barcode, a product name you tap on the pack, or a
 photo of the nutrition label. A barcode is looked up on Open Food Facts, a name is searched in your
 products, the Dutch food table (NEVO) and Open Food Facts, and a label photo fills in a new product
 for you to check. You can also type or search instead. A product you found opens on the Match
 screen, where you turn the gram dial, pick the meal and log it; a new one opens on the Create
-screen, which asks about any value that was hard to read and saves and logs it in one go.
+screen, which asks about any value that was hard to read and saves and logs it in one go. On Today,
+tap a food to change the amount, meal or time, or delete it; Apple Health gets the same change. Tap
+the headline to set your daily goal.
 
 ## Layout
 
@@ -21,6 +24,7 @@ screen, which asks about any value that was hard to read and saves and logs it i
     nutrient, reads it back, and deletes it.
   - `Health/EntryLogger.swift` keeps each entry in Biteflux first, then writes it to Apple Health
     and only marks it "In Apple Health" once it reads back. Retries never save the same entry twice.
+    Apple Health can't edit a saved food, so a changed entry replaces its old Health entry.
   - `Library/` is the product library: barcode lookup on Open Food Facts, NEVO search, your own
     products, the Match screen with the gram dial, and the Create screen for a new product.
     Products keep nutrients per 100 g; each entry keeps its own copy, so editing or removing a
@@ -75,6 +79,23 @@ and keeps it in the iPhone's Keychain; it is never part of this repository. Each
 fraction of a cent on your OpenRouter account. The model copies the numbers as printed, Biteflux
 works them out per 100 g, and values the model could only partly read are highlighted in the
 product form for you to check.
+
+## iCloud sync
+
+Your log and library stay on the phone for now. The models are ready for iCloud (every property has
+a default, nothing is unique), but sync needs the iCloud capability, which needs a paid Apple
+developer account. To turn it on:
+
+1. In Xcode, under Signing & Capabilities, pick the paid team, add iCloud with CloudKit and a
+   container such as `iCloud.com.kevinvandijk.biteflux`, and add Background Modes with Remote
+   notifications.
+2. Set `BitefluxApp.iCloudContainer` to that container.
+3. Before a TestFlight or App Store build, deploy the schema to production in the CloudKit Console;
+   those builds use the production environment.
+
+Each device writes what it syncs to Apple Health only when Apple Health doesn't have it yet, but
+Apple Health syncs between devices on its own schedule. Log on one device at a time to be sure
+nothing lands there twice.
 
 ## Data sources
 

@@ -5,6 +5,7 @@ import SwiftUI
 struct MealCard: View {
     var meal: Meal
     var entries: [FoodEntry]
+    var onEdit: (FoodEntry) -> Void
     var onDelete: (FoodEntry) -> Void
 
     private var totalKcal: Double {
@@ -20,12 +21,20 @@ struct MealCard: View {
                 MealStatus(states: entries.map(\.syncState))
             }
             ForEach(entries) { entry in
-                EntryRow(entry: entry)
-                    .contextMenu {
-                        Button("Delete", systemImage: "trash", role: .destructive) {
-                            onDelete(entry)
-                        }
+                Button {
+                    onEdit(entry)
+                } label: {
+                    EntryRow(entry: entry)
+                        .frame(minHeight: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Change or delete it")
+                .contextMenu {
+                    Button("Delete", systemImage: "trash", role: .destructive) {
+                        onDelete(entry)
                     }
+                }
             }
         }
         .padding(.horizontal, 16)

@@ -70,6 +70,16 @@ final class EntryLogger {
             }
             refreshAccess()
 
+            if entry.healthOutdated {
+                // Apple Health can't edit a saved food, so the old one goes and the new values are saved fresh.
+                if entry.healthFoodID != nil || health.access == .allowed {
+                    try await health.deleteFood(forEntry: entry.entryID)
+                }
+                entry.healthFoodID = nil
+                entry.healthOutdated = false
+                try? context.save()
+            }
+
             if let savedID = entry.healthFoodID {
                 // Saved earlier: only confirm it, never save it again.
                 guard try await health.foodExists(withID: savedID) else { throw HealthStore.Problem.notReadBack }
@@ -98,6 +108,20 @@ final class EntryLogger {
         for entry in entries {
             await sync(entry, in: context)
         }
+    }
+
+    /// Keeps a change to an entry in Biteflux, then replaces the entry in Apple Health with the
+    /// new values. Waits for a save or delete of the same entry to finish first.
+    func update(_ entry: FoodEntry, in context: ModelContext, change: (FoodEntry) -> Void) async {
+        while let other = running[entry.entryID] {
+            await other.value
+        }
+        guard !entry.isDeleted, entry.modelContext != nil else { return }
+        change(entry)
+        entry.healthOutdated = true
+        entry.syncState = .waiting
+        entry.syncProblem = nil
+        await start(entry.entryID) { await self.write(entry, in: context) }.value
     }
 
     /// Removes the entry from Apple Health first, then from Biteflux.

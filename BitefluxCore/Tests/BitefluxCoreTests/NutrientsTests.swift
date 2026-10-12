@@ -17,6 +17,19 @@ final class NutrientsTests: XCTestCase {
         XCTAssertNil(koek.saturatedFatG)
     }
 
+    func testRescalingALoggedPortion() {
+        // 150 g of skyr, changed to 200 g.
+        let logged = Nutrients(energyKcal: 94.5, proteinG: 16.5, carbohydratesG: 6, sugarG: 6, fatG: 0.3, sodiumMg: 60)
+        let changed = logged.rescaled(fromPortionOf: 150, to: 200)
+
+        XCTAssertEqual(changed?.energyKcal ?? -1, 126, accuracy: 0.001)
+        XCTAssertEqual(changed?.proteinG ?? -1, 22, accuracy: 0.001)
+        XCTAssertEqual(changed?.sodiumMg ?? -1, 80, accuracy: 0.001)
+        XCTAssertNil(changed?.fiberG)
+        // Without a weight there's nothing to work from.
+        XCTAssertNil(logged.rescaled(fromPortionOf: 0, to: 200))
+    }
+
     func testAddingKeepsMissingValuesMissing() {
         let a = Nutrients(energyKcal: 95, proteinG: 16.5, carbohydratesG: 6, fatG: 0.3)
         let b = Nutrients(energyKcal: 105, proteinG: 1.3, carbohydratesG: 27, fiberG: 3.1, fatG: 0.4)

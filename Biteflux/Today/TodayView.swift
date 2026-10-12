@@ -7,11 +7,14 @@ struct TodayView: View {
     @Environment(\.modelContext) private var context
     @Environment(EntryLogger.self) private var logger
     @Query(sort: \FoodEntry.eatenAt) private var entries: [FoodEntry]
-    @AppStorage("dailyGoalKcal") private var goalKcal = 2300.0
+    @Query private var products: [Product]
+    @AppStorage("dailyGoalKcal") private var goalKcal = DailyGoal.standardKcal
     @State private var scanning = false
     /// What the Scan screen found, opened in the library once the camera has closed.
     @State private var afterScan: AddFoodRequest?
     @State private var addFood: AddFoodRequest?
+    @State private var editing: FoodEntry?
+    @State private var settingGoal = false
 
     private var today: [FoodEntry] {
         entries.filter { Calendar.current.isDateInToday($0.eatenAt) }
@@ -36,7 +39,7 @@ struct TodayView: View {
                         ForEach(Meal.allCases) { meal in
                             let mealEntries = today.filter { $0.meal == meal }
                             if !mealEntries.isEmpty {
-                                MealCard(meal: meal, entries: mealEntries, onDelete: delete)
+                                MealCard(meal: meal, entries: mealEntries, onEdit: { editing = $0 }, onDelete: delete)
                             }
                         }
                         nevoCredit
@@ -60,6 +63,17 @@ struct TodayView: View {
         .sheet(item: $addFood) { request in
             AddFoodSheet(start: request.start, onLog: log)
         }
+        .sheet(item: $editing) { entry in
+            EntrySheet(
+                entry: entry,
+                product: products.first { $0.productID == entry.productID },
+                onSave: { save($0, to: entry) },
+                onDelete: { delete(entry) }
+            )
+        }
+        .sheet(isPresented: $settingGoal) {
+            GoalSheet()
+        }
     }
 
     private var header: some View {
@@ -69,16 +83,26 @@ struct TodayView: View {
             .frame(minHeight: 44, alignment: .leading)
     }
 
+    /// Tap it to change the daily goal.
     private var headline: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            headlineText
-                .font(Ember.serif(34))
-                .accessibilityAddTraits(.isHeader)
-            Text(verbatim: summaryLine)
-                .font(Ember.sans(13, relativeTo: .footnote))
-                .foregroundStyle(Ember.secondaryText)
-            ProgressBar(progress: summary.progress)
+        Button {
+            settingGoal = true
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                headlineText
+                    .font(Ember.serif(34))
+                    .multilineTextAlignment(.leading)
+                    .accessibilityAddTraits(.isHeader)
+                Text(verbatim: summaryLine)
+                    .font(Ember.sans(13, relativeTo: .footnote))
+                    .foregroundStyle(Ember.secondaryText)
+                    .multilineTextAlignment(.leading)
+                ProgressBar(progress: summary.progress)
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityHint("Change your daily goal")
     }
 
     private var headlineText: Text {
@@ -172,6 +196,12 @@ struct TodayView: View {
 
     private func delete(_ entry: FoodEntry) {
         Task { await logger.delete(entry, in: context) }
+    }
+
+    /// Keeps the change, then replaces the entry in Apple Health.
+    private func save(_ change: EntryChange, to entry: FoodEntry) {
+        let product = products.first { $0.productID == entry.productID }
+        Task { await logger.update(entry, in: context) { $0.apply(change, product: product) } }
     }
 
     private func retry() {

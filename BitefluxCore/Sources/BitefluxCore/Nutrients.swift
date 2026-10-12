@@ -55,6 +55,13 @@ public struct Nutrients: Equatable, Hashable, Codable, Sendable {
         scaled(by: grams / 100)
     }
 
+    /// Treats these values as a portion of `grams` and returns them for `newGrams` of the same food.
+    /// Nil when the portion has no weight to work from.
+    public func rescaled(fromPortionOf grams: Double, to newGrams: Double) -> Nutrients? {
+        guard grams > 0, newGrams >= 0 else { return nil }
+        return scaled(by: newGrams / grams)
+    }
+
     /// Adds two sets of nutrients. An optional value stays `nil` only when both sides lack it.
     public static func + (lhs: Nutrients, rhs: Nutrients) -> Nutrients {
         Nutrients(
