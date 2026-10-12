@@ -5,11 +5,13 @@ keeps your food log, and saves every entry with its nutrients to Apple Health.
 The look follows the B4 "Ember" design: dark and warm, serif numbers, plain-language sync status.
 
 Built so far: the app skeleton, the Today screen and the Apple Health round trip (step 1), the
-product library (step 2), and scanning (step 3). "Scan something" opens the camera, which reads a
-barcode, a product name you tap on the pack, or a photo of the nutrition label. A barcode is looked
-up on Open Food Facts, a name is searched in your products, the Dutch food table (NEVO) and Open
-Food Facts, and a label photo fills in a new product for you to check. You can also type or search
-instead.
+product library (step 2), scanning (step 3), and the Match and Create screens (step 4).
+"Scan something" opens the camera, which reads a barcode, a product name you tap on the pack, or a
+photo of the nutrition label. A barcode is looked up on Open Food Facts, a name is searched in your
+products, the Dutch food table (NEVO) and Open Food Facts, and a label photo fills in a new product
+for you to check. You can also type or search instead. A product you found opens on the Match
+screen, where you turn the gram dial, pick the meal and log it; a new one opens on the Create
+screen, which asks about any value that was hard to read and saves and logs it in one go.
 
 ## Layout
 
@@ -20,15 +22,16 @@ instead.
   - `Health/EntryLogger.swift` keeps each entry in Biteflux first, then writes it to Apple Health
     and only marks it "In Apple Health" once it reads back. Retries never save the same entry twice.
   - `Library/` is the product library: barcode lookup on Open Food Facts, NEVO search, your own
-    products, and the screen where you pick a portion and log it. Products keep nutrients per
-    100 g; each entry keeps its own copy, so editing or removing a product never changes your log.
+    products, the Match screen with the gram dial, and the Create screen for a new product.
+    Products keep nutrients per 100 g; each entry keeps its own copy, so editing or removing a
+    product never changes your log.
   - `Scan/` is the Scan screen (Apple's live text and barcode scanner) and label reading with
     GPT Luna 6 through OpenRouter.
   - `Today/` is the Today screen, `Theme/` the Ember colours and fonts.
 - `BitefluxCore/` is a Swift package with the logic that doesn't need a phone: nutrient maths,
-  kJ to kcal, salt to sodium, the meal for a time of day, the day's totals, reading Open Food Facts
-  answers and the NEVO table, the label reading request and answer, barcode check digits, and
-  search.
+  kJ to kcal, salt to sodium, the meal for a time of day, the day's totals, the gram dial,
+  reading Open Food Facts answers and the NEVO table, the label reading request and answer,
+  barcode check digits, and search.
 
 ## Build and test
 

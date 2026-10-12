@@ -33,6 +33,8 @@ final class Product {
 
     var addedAt: Date = Date()
     var lastLoggedAt: Date?
+    /// What you ate last time, so the Match screen starts there.
+    var lastLoggedGrams: Double?
     var timesLogged: Int = 0
 
     init(

@@ -122,9 +122,11 @@ struct AddFoodSheet: View {
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case let .product(product):
-                    ProductView(product: product, onLog: log)
+                    MatchView(product: product, onLog: log) {
+                        path.append(.newProduct(ProductDraft(barcode: product.barcode, note: notItNote(for: product))))
+                    }
                 case let .newProduct(draft):
-                    ProductForm(draft: draft, onSave: saved)
+                    CreateView(draft: draft, onSave: saved)
                 }
             }
         }
@@ -427,15 +429,29 @@ struct AddFoodSheet: View {
         let kept = product.modelContext == nil ? keep(product) : product
         let now = Date.now
         kept.lastLoggedAt = now
+        kept.lastLoggedGrams = grams
         kept.timesLogged += 1
         onLog(kept.entry(grams: grams, meal: meal, eatenAt: now))
         dismiss()
     }
 
-    private func saved(_ product: Product) {
+    /// A new product joins your library, and is logged when you asked for that too.
+    private func saved(_ product: Product, portion: CreateView.Portion?) {
         let kept = keep(product)
         try? context.save()
-        path = [.product(kept)]
+        if let portion {
+            log(kept, grams: portion.grams, meal: portion.meal)
+        } else {
+            path = []
+        }
+    }
+
+    /// Why the Create screen opened from a match that wasn't the right product.
+    private func notItNote(for product: Product) -> String {
+        guard let barcode = product.barcode else {
+            return "Add the product you have from its label."
+        }
+        return "Add the product you have from its label. It keeps barcode \(barcode), so scanning it finds this one from now on."
     }
 
     /// Adds a product to your library. When the library already has the same barcode or NEVO food,
