@@ -40,7 +40,11 @@ struct TodayView: View {
             dayScreen
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(isPresented: $showingSettings) {
+                    // Once Settings has gone, ask for anything that came up while it was open, as
+                    // a sheet's onDismiss does. Its disappearance comes after the way back has
+                    // finished, when Apple's permission sheet can show.
                     SettingsView()
+                        .onDisappear(perform: askForHealthIfNeeded)
                 }
         }
     }
